@@ -1,18 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
-import { Link } from '@/i18n/navigation';
+import { Info, X } from 'lucide-react';
 
 type Props = {
   message: string;
-  ctaLabel: string;
-  ctaHref: string;
+  /** Bandeau edge-to-edge (home). */
+  fullWidth?: boolean;
 };
 
-const STORAGE_KEY = 'sf-announce-dismissed-v1';
+const STORAGE_KEY = 'sf-announce-dismissed-v2';
 
-export function AnnouncementBar({ message, ctaLabel, ctaHref }: Props) {
+export function AnnouncementBar({ message, fullWidth = false }: Props) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -35,24 +34,23 @@ export function AnnouncementBar({ message, ctaLabel, ctaHref }: Props) {
   }
 
   return (
-    <div className="relative bg-[#e8f1fb] text-[#1e3a5f]">
-      <div className="mx-auto flex max-w-7xl items-center justify-center gap-2 px-10 py-2.5 text-center text-sm md:px-8">
-        <p className="text-[13px] leading-snug">
-          {message}{' '}
-          <Link
-            href={ctaHref}
-            className="font-semibold underline underline-offset-2 hover:text-brand-blue"
-          >
-            {ctaLabel}
-          </Link>
-        </p>
+    <div className="relative w-full border-b border-[#dbe4ee] bg-[#eff4f9]">
+      <div
+        className={
+          fullWidth
+            ? 'flex w-full items-center gap-2.5 px-4 py-2.5 pe-10 sm:px-6 md:px-10'
+            : 'mx-auto flex max-w-7xl items-center gap-2.5 px-4 py-2.5 pe-10 md:px-8'
+        }
+      >
+        <Info className="h-4 w-4 shrink-0 text-[#5c7cc2]" strokeWidth={2} aria-hidden />
+        <p className="min-w-0 flex-1 text-[13px] leading-snug text-[#1a1d23]">{message}</p>
         <button
           type="button"
           onClick={dismiss}
-          className="absolute end-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-[#1e3a5f]/70 hover:bg-white/60 hover:text-[#1e3a5f]"
+          className="absolute end-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-[#5c7cc2]/80 hover:bg-white/70 hover:text-[#1e3a5f]"
           aria-label="Fermer"
         >
-          <X className="h-4 w-4" />
+          <X className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

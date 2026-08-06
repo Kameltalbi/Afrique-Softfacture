@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { DM_Sans, Noto_Sans_Arabic } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server';
@@ -33,8 +33,34 @@ export async function generateMetadata({
   return {
     title: t('title'),
     description: t('description'),
+    applicationName: 'SoftFacture Afrique',
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: 'default',
+      title: 'SoftFacture',
+    },
+    formatDetection: {
+      telephone: false,
+    },
+    icons: {
+      icon: [
+        { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+        { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+      ],
+      apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+    },
+    other: {
+      'mobile-web-app-capable': 'yes',
+    },
   };
 }
+
+export const viewport: Viewport = {
+  themeColor: '#2663eb',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+};
 
 export default async function LocaleLayout({
   children,

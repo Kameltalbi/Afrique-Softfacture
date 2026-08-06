@@ -43,3 +43,9 @@ yarn-error.log*
 
 /src/generated/prisma
 .github/workflows/
+
+# Serwist / PWA
+public/sw.js
+public/sw.js.map
+public/swe-worker*
+public/sw*
