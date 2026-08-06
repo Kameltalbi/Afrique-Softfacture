@@ -5,7 +5,8 @@ import { Check } from 'lucide-react';
 import { PricingPlanActions } from '@/components/marketing/pricing-plan-actions';
 import { cn } from '@/lib/utils';
 import {
-  formatPlanPriceDual,
+  formatPlanAmount,
+  getDisplayedPlanPrice,
   HIGHLIGHTED_PLAN_ID,
   PLAN_HIGHLIGHT_KEYS,
   PLAN_IDS,
@@ -13,6 +14,8 @@ import {
 import type { PlanId } from '@/lib/pricing-plans';
 import type { BillingPlansResponse } from '@/lib/billing-api';
 import { usePublicBillingPlans } from '@/hooks/use-public-billing-plans';
+import { useAuth } from '@/contexts/auth-context';
+import { billingCurrencyForCountry, type BillingCurrency } from '@/lib/markets';
 
 export function PricingPlanCards({
   currentPlanId,
@@ -22,7 +25,11 @@ export function PricingPlanCards({
   initialBilling?: BillingPlansResponse;
 }) {
   const t = useTranslations('pricing');
-  const { planPrices, loading } = usePublicBillingPlans(initialBilling);
+  const { user } = useAuth();
+  const { loading } = usePublicBillingPlans(initialBilling);
+
+  const currency: BillingCurrency = billingCurrencyForCountry(user?.organization?.country ?? 'TN');
+  const isTunisia = currency === 'TND';
 
   if (loading && !initialBilling) {
     return <p className="text-sm text-s-muted">…</p>;
@@ -33,7 +40,7 @@ export function PricingPlanCards({
       {PLAN_IDS.map((planId) => {
         const highlighted = planId === HIGHLIGHTED_PLAN_ID;
         const isCurrent = currentPlanId === planId;
-        const priceFormatted = formatPlanPriceDual(planPrices[planId]);
+        const shown = getDisplayedPlanPrice(planId, currency, isTunisia);
 
         return (
           <div
@@ -61,12 +68,24 @@ export function PricingPlanCards({
             <p className="mt-4 text-2xl font-bold">
               {planId === 'free' ? (
                 <>
-                  0 <span className="text-sm font-semibold text-slate-600">TND / USD</span>
-                  <span className="text-sm font-normal text-slate-500">{t('perMonth')}</span>
+                  0{' '}
+                  <span className="text-sm font-semibold text-slate-600">
+                    {isTunisia ? 'DT' : 'USD'}
+                  </span>
+                  {!isTunisia && (
+                    <span className="text-sm font-normal text-slate-500">{t('perMonth')}</span>
+                  )}
+                </>
+              ) : isTunisia ? (
+                <>
+                  {formatPlanAmount(shown.amount)}{' '}
+                  <span className="text-sm font-semibold text-slate-600">DT HT</span>
+                  <span className="text-sm font-normal text-slate-500"> / an</span>
                 </>
               ) : (
                 <>
-                  {priceFormatted}{' '}
+                  {formatPlanAmount(shown.amount)}{' '}
+                  <span className="text-sm font-semibold text-slate-600">USD</span>
                   <span className="text-sm font-normal text-slate-500">{t('perMonth')}</span>
                 </>
               )}

@@ -169,14 +169,14 @@
       "monthly": "Mensuel",
       "yearly": "Annuel",
       "yearlyBadge": "Économisez ~2 mois avec l'abonnement annuel",
-      "yearlyNote": "Prix affiché = équivalent mensuel. Facturation annuelle (10 mois payés pour 12). Tunisie : TND — autres pays : USD."
+      "yearlyNote": "Prix affiché = équivalent mensuel dans la devise de votre pays. Facturation annuelle (10 mois payés pour 12)."
     },
     "trialBadge": "1 mois d'essai sur les offres payantes",
     "freeForeverBadge": "Gratuit pour toujours",
     "popularBadge": "Le plus populaire",
     "cta": "Choisir cette offre",
     "ctaFree": "Commencer gratuitement",
-    "footnote": "Même montant : TND en Tunisie, USD dans les autres pays. Sans engagement.",
+    "footnote": "Tunisie : tarifs HT annuels en DT. Autres pays : USD. Sans engagement.",
     "currentPlan": "Offre actuelle",
     "currentPlanCta": "Offre active",
     "choosePlan": "Choisir cette offre",
@@ -260,7 +260,7 @@
         }
       },
       "pro": {
-        "name": "Pro",
+        "name": "Essentiel",
         "audience": "Indépendants, freelances et artisans actifs",
         "highlights": {
           "users": "1 à 2 utilisateurs (ex. + comptable)",
@@ -286,6 +286,16 @@
           "support": "Support prioritaire par chat"
         }
       }
+    },
+    "countrySelectLabel": "Votre pays",
+    "tunisia": {
+      "noCard": "Sans carte bancaire",
+      "freeForever": "Gratuit à vie",
+      "perDay": "Moins de {amount} DT par jour · Paiement annuel",
+      "yearlyPayment": "Paiement annuel",
+      "ctaFree": "Créer un compte gratuitement",
+      "ctaPro": "Passer à l'Essentiel",
+      "ctaBusiness": "Choisir Business"
     }
   },
   "auth": {

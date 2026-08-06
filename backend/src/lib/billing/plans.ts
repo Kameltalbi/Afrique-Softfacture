@@ -21,8 +21,8 @@ const PLAN_TO_SLUG: Record<SubscriptionPlan, BillingPlanSlug> = {
 };
 
 /**
- * Prix mensuels — identiques à `src/lib/pricing-plans.ts` PLAN_PRICES.
- * Même montant en TND (Tunisie) et USD (autres pays).
+ * Prix USD mensuels (hors Tunisie).
+ * Tunisie : PLAN_PRICE_TND_YEARLY_HT (annuel HT).
  */
 export const PLAN_PRICE: Record<SubscriptionPlan, number> = {
   FREE: 0,
@@ -30,10 +30,17 @@ export const PLAN_PRICE: Record<SubscriptionPlan, number> = {
   BUSINESS: 24.9,
 };
 
+/** Prix Tunisie HT annuels (DT) — Gratuit 0 · Essentiel 320 · Business 480 */
+export const PLAN_PRICE_TND_YEARLY_HT: Record<SubscriptionPlan, number> = {
+  FREE: 0,
+  PRO: 320,
+  BUSINESS: 480,
+};
+
 /** @deprecated */
 export const PLAN_PRICE_HT_EUR = PLAN_PRICE;
 
-/** Équivalent mensuel en annuel (affichage marketing). */
+/** Équivalent mensuel USD en annuel (affichage marketing). */
 export const PLAN_PRICE_YEARLY_EQ: Record<SubscriptionPlan, number> = {
   FREE: 0,
   PRO: 7.9,
@@ -107,8 +114,13 @@ export function isStripeCheckoutReady(): boolean {
 }
 
 /** Montant unitaire Stripe en centimes (toujours HT — TVA via Stripe Tax si activé). */
-export function stripeLineItemAmountCents(plan: SubscriptionPlan): number {
-  return priceHtToCents(PLAN_PRICE_HT_EUR[plan]);
+export function stripeLineItemAmountCents(
+  plan: SubscriptionPlan,
+  currency: 'tnd' | 'usd' | string = 'usd'
+): number {
+  const amount =
+    currency.toLowerCase() === 'tnd' ? PLAN_PRICE_TND_YEARLY_HT[plan] : PLAN_PRICE_HT_EUR[plan];
+  return priceHtToCents(amount);
 }
 
 export function isStripeAutomaticTaxEnabled(): boolean {

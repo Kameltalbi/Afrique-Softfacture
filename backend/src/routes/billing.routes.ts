@@ -14,6 +14,7 @@ import {
   slugToSubscriptionPlan,
   subscriptionPlanToSlug,
   PLAN_PRICE_HT_EUR,
+  PLAN_PRICE_TND_YEARLY_HT,
   SUBSCRIPTION_VAT_RATE_PERCENT,
 } from '../lib/billing/index.js';
 import { isValidEmail, normalizeSiret, normalizeVatNumber } from '../lib/billing/validation.js';
@@ -31,17 +32,27 @@ const checkoutBodySchema = z.object({
   acceptTerms: z.literal(true, { message: 'Vous devez accepter les CGV' }),
 });
 
-/** Plans publics (tarifs Afrique : TND Tunisie / USD autres, même montant). */
+function planPriceForCurrency(
+  plan: keyof typeof PLAN_PRICE_HT_EUR,
+  currency: 'TND' | 'USD'
+): number {
+  if (currency === 'TND') return PLAN_PRICE_TND_YEARLY_HT[plan];
+  return PLAN_PRICE_HT_EUR[plan];
+}
+
+/** Plans publics (tarifs Afrique : TND Tunisie annuel / USD mensuel). */
 billingPublicRouter.get('/plans', (_req, res) => {
   const plans = BILLING_PLAN_SLUGS.map((slug) => {
     const apiPlan = slugToSubscriptionPlan(slug)!;
-    const priceHt = PLAN_PRICE_HT_EUR[apiPlan];
-    const priceTtc = priceHtToTtcEur(priceHt);
+    const priceUsd = PLAN_PRICE_HT_EUR[apiPlan];
+    const priceTndYearly = PLAN_PRICE_TND_YEARLY_HT[apiPlan];
     return {
       slug,
       plan: apiPlan,
-      priceHtEur: priceHt,
-      priceTtcEur: priceTtc,
+      priceHtEur: priceUsd,
+      priceTtcEur: priceHtToTtcEur(priceUsd),
+      priceUsdMonthly: priceUsd,
+      priceTndYearlyHt: priceTndYearly,
       vatRatePercent: SUBSCRIPTION_VAT_RATE_PERCENT,
       trialDays: TRIAL_DAYS,
       currency: 'USD',
@@ -53,7 +64,7 @@ billingPublicRouter.get('/plans', (_req, res) => {
     country: 'AF',
     currency: 'USD',
     currencies: ['TND', 'USD'],
-    pricingNote: 'Tunisie : TND — autres pays : USD (même montant)',
+    pricingNote: 'Tunisie : DT HT / an — autres pays : USD / mois',
     vatRatePercent: SUBSCRIPTION_VAT_RATE_PERCENT,
     trialDays: TRIAL_DAYS,
     paymentProviderConfigured: isStripeCheckoutReady(),
@@ -132,14 +143,14 @@ billingProtectedRouter.post('/checkout', requireRoles('ADMIN'), async (req, res)
   const org = await prisma.organization.findUnique({ where: { id: orgId } });
   if (!org) return res.status(404).json({ error: 'Organisation introuvable' });
 
-  const priceHt = PLAN_PRICE_HT_EUR[plan];
+  const orgCurrency = billingCurrencyForCountry(org.country);
+  const billingCurrency = orgCurrency.toLowerCase();
+  const priceHt = planPriceForCurrency(plan, orgCurrency);
   const amountTtcCents = priceTtcToCents(priceHtToTtcEur(priceHt));
   const baseUrl = getFrontendBaseUrl();
   const planSlug = subscriptionPlanToSlug(plan);
   const successUrl = `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
   const cancelUrl = `${baseUrl}/checkout/cancel?plan=${planSlug}`;
-  const orgCurrency = billingCurrencyForCountry(org.country);
-  const billingCurrency = orgCurrency.toLowerCase();
 
   // Plan gratuit : activation immédiate, sans Stripe ni période d'essai.
   if (!isPaidPlan(plan)) {

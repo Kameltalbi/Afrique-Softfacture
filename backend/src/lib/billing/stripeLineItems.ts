@@ -2,6 +2,7 @@ import type Stripe from 'stripe';
 import type { SubscriptionPlan } from '../../generated/prisma/index.js';
 import {
   PLAN_PRICE_HT_EUR,
+  PLAN_PRICE_TND_YEARLY_HT,
   PLAN_STRIPE_LABELS,
   stripeLineItemAmountCents,
   stripePriceIdForPlan,
@@ -9,10 +10,12 @@ import {
 
 /**
  * Ligne d'abonnement Checkout : Price ID Dashboard optionnel,
- * sinon montant HT de la page /tarifs via price_data (+ TVA Stripe Tax).
+ * sinon montant de la page /tarifs via price_data.
+ * Tunisie (TND) = annuel HT · autres = mensuel USD.
  */
 export function buildSubscriptionLineItem(
-  plan: SubscriptionPlan
+  plan: SubscriptionPlan,
+  currency: string = 'usd'
 ): Stripe.Checkout.SessionCreateParams.LineItem {
   if (plan === 'FREE') {
     throw new Error('Le plan Gratuit ne nécessite pas de session Stripe');
@@ -22,19 +25,23 @@ export function buildSubscriptionLineItem(
     return { price: priceId, quantity: 1 };
   }
 
-  const ht = PLAN_PRICE_HT_EUR[plan];
-  const unitAmount = stripeLineItemAmountCents(plan);
+  const cur = currency.toLowerCase();
+  const isTnd = cur === 'tnd';
+  const amount = isTnd ? PLAN_PRICE_TND_YEARLY_HT[plan] : PLAN_PRICE_HT_EUR[plan];
+  const unitAmount = stripeLineItemAmountCents(plan, cur);
 
   return {
     quantity: 1,
     price_data: {
-      currency: 'eur',
+      currency: cur,
       unit_amount: unitAmount,
       product_data: {
         name: PLAN_STRIPE_LABELS[plan],
-        description: `${ht.toFixed(2).replace('.', ',')} € HT/mois (comme sur la page Tarifs). TVA en sus.`,
+        description: isTnd
+          ? `${amount} DT HT/an (page Tarifs Tunisie).`
+          : `${amount.toFixed(2).replace('.', ',')} USD /mois (page Tarifs).`,
       },
-      recurring: { interval: 'month' },
+      recurring: { interval: isTnd ? 'year' : 'month' },
     },
   };
 }

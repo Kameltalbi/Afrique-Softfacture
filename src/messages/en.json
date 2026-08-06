@@ -208,14 +208,14 @@
       "monthly": "Monthly",
       "yearly": "Yearly",
       "yearlyBadge": "Save ~2 months with annual billing",
-      "yearlyNote": "Displayed price = monthly HT equivalent. Billed yearly (10 months paid for 12)."
+      "yearlyNote": "Displayed price = monthly equivalent in your country currency. Annual billing (10 months paid for 12)."
     },
     "trialBadge": "1-month trial on paid plans",
     "freeForeverBadge": "Free forever",
     "popularBadge": "Most popular",
     "cta": "Choose this plan",
     "ctaFree": "Start for free",
-    "footnote": "Prices excl. VAT. French VAT (20%) applies on paid plans. No commitment.",
+    "footnote": "Prices are shown in your country currency: TND (Tunisia) or USD (other countries). No commitment.",
     "currentPlan": "Current plan",
     "currentPlanCta": "Active plan",
     "choosePlan": "Choose this plan",
@@ -299,7 +299,7 @@
         }
       },
       "pro": {
-        "name": "Pro",
+        "name": "Essential",
         "audience": "Active independents, freelancers and artisans",
         "highlights": {
           "users": "1–2 users (e.g. + accountant)",
@@ -325,6 +325,16 @@
           "support": "Priority chat support"
         }
       }
+    },
+    "countrySelectLabel": "Your country",
+    "tunisia": {
+      "noCard": "No credit card required",
+      "freeForever": "Free forever",
+      "perDay": "Less than {amount} DT per day · Annual billing",
+      "yearlyPayment": "Annual billing",
+      "ctaFree": "Create a free account",
+      "ctaPro": "Upgrade to Essential",
+      "ctaBusiness": "Choose Business"
     }
   },
   "auth": {

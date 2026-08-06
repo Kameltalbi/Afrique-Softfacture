@@ -10,7 +10,7 @@ import { PLAN_PRICES_HT_EUR, TRIAL_DAYS } from '@/lib/pricing-plans';
 
 export function CgvContent() {
   const L = LEGAL_SITE;
-  const prices = `Gratuit 0, Pro ${PLAN_PRICES_HT_EUR.pro.toFixed(2).replace('.', ',')} TND/USD/mois, Business ${PLAN_PRICES_HT_EUR.business.toFixed(2).replace('.', ',')} TND/USD/mois (Tunisie : TND — autres pays : USD, même montant)`;
+  const prices = `Gratuit 0 DT, Essentiel 320 DT HT/an, Business 480 DT HT/an (Tunisie) ; hors Tunisie tarifs en USD /mois`;
 
   return (
     <>

@@ -30,7 +30,7 @@ export class StripeBillingProvider implements BillingProviderAdapter {
     try {
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: 'subscription',
-        line_items: [buildSubscriptionLineItem(input.plan)],
+        line_items: [buildSubscriptionLineItem(input.plan, input.currency)],
         success_url: input.successUrl,
         cancel_url: input.cancelUrl,
         locale: 'fr',

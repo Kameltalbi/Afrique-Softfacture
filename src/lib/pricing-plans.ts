@@ -4,35 +4,44 @@ export type PlanId = (typeof PLAN_IDS)[number];
 export const HIGHLIGHTED_PLAN_ID: PlanId = 'pro';
 
 /**
- * Montants mensuels d'abonnement (même chiffre en TND Tunisie / USD autres pays).
+ * Prix USD mensuels (hors Tunisie).
  * Synchroniser avec backend/src/lib/billing/plans.ts
  */
-export const PLAN_PRICES: Record<PlanId, number> = {
+export const PLAN_PRICES_USD_MONTHLY: Record<PlanId, number> = {
   free: 0,
   pro: 9.9,
   business: 24.9,
 };
 
-/** @deprecated Alias — montants identiques en TND/USD */
-export const PLAN_PRICES_HT_EUR = PLAN_PRICES;
-
-/**
- * Équivalent mensuel en facturation annuelle (~2 mois offerts).
- * Affiché lorsque le toggle « Annuel » est actif.
- */
-export const PLAN_PRICES_YEARLY_EQ: Record<PlanId, number> = {
+/** Équivalent mensuel USD en annuel (~2 mois offerts). */
+export const PLAN_PRICES_USD_YEARLY_EQ: Record<PlanId, number> = {
   free: 0,
   pro: 7.9,
   business: 19.9,
 };
 
+/**
+ * Prix Tunisie HT annuels (affichage DT) — SoftFacture Tunisie.
+ * Gratuit 0 · Essentiel 320 · Business 480
+ */
+export const PLAN_PRICES_TND_YEARLY_HT: Record<PlanId, number> = {
+  free: 0,
+  pro: 320,
+  business: 480,
+};
+
+/** @deprecated Alias USD mensuel */
+export const PLAN_PRICES = PLAN_PRICES_USD_MONTHLY;
 /** @deprecated */
-export const PLAN_PRICES_YEARLY_EQ_HT_EUR = PLAN_PRICES_YEARLY_EQ;
+export const PLAN_PRICES_HT_EUR = PLAN_PRICES_USD_MONTHLY;
+/** @deprecated */
+export const PLAN_PRICES_YEARLY_EQ = PLAN_PRICES_USD_YEARLY_EQ;
+/** @deprecated */
+export const PLAN_PRICES_YEARLY_EQ_HT_EUR = PLAN_PRICES_USD_YEARLY_EQ;
+/** @deprecated */
+export const PLAN_PRICES_EUR = PLAN_PRICES_USD_MONTHLY;
 
-/** @deprecated Utiliser PLAN_PRICES */
-export const PLAN_PRICES_EUR = PLAN_PRICES;
-
-/** Pas de TVA SaaS forcée — prix affiché = montant facturé (TND ou USD). */
+/** Pas de TVA SaaS forcée — prix affiché = montant facturé (sauf mention HT Tunisie). */
 export const SUBSCRIPTION_VAT_RATE = 0;
 
 export const TRIAL_DAYS = 30;
@@ -62,6 +71,7 @@ export function priceHtToTtc(ht: number, vatRate = SUBSCRIPTION_VAT_RATE): numbe
 }
 
 export function formatPlanAmount(amount: number): string {
+  if (Number.isInteger(amount)) return String(amount);
   return amount.toFixed(2).replace('.', ',');
 }
 
@@ -70,10 +80,42 @@ export function formatEur(amount: number): string {
   return formatPlanAmount(amount);
 }
 
-/** Affichage marketing : même montant en TND et USD. */
+/** Affichage prix avec une seule devise (TND→DT ou USD). */
+export function formatPlanPrice(amount: number, currency: 'TND' | 'USD'): string {
+  const unit = currency === 'TND' ? 'DT' : 'USD';
+  return `${formatPlanAmount(amount)} ${unit}`;
+}
+
+/** Prix à afficher selon marché / cycle. */
+export function getDisplayedPlanPrice(
+  planId: PlanId,
+  currency: 'TND' | 'USD',
+  yearly: boolean
+): { amount: number; suffix: string; hint?: string } {
+  if (currency === 'TND') {
+    const amount = PLAN_PRICES_TND_YEARLY_HT[planId];
+    if (planId === 'free') {
+      return { amount: 0, suffix: 'DT', hint: 'noCard' };
+    }
+    const perDay = amount / 365;
+    return {
+      amount,
+      suffix: 'DT HT / an',
+      hint: planId === 'pro' ? `perDay:${perDay.toFixed(3).replace('.', ',')}` : 'yearlyOnly',
+    };
+  }
+
+  const amount = yearly ? PLAN_PRICES_USD_YEARLY_EQ[planId] : PLAN_PRICES_USD_MONTHLY[planId];
+  return {
+    amount,
+    suffix: yearly ? 'USD' : 'USD',
+    hint: yearly ? 'yearlyEq' : 'monthly',
+  };
+}
+
+/** @deprecated Préférer formatPlanPrice(amount, currency) */
 export function formatPlanPriceDual(amount: number): string {
-  const n = formatPlanAmount(amount);
-  return `${n} TND / ${n} USD`;
+  return formatPlanPrice(amount, 'USD');
 }
 
 /** Keys for plan card bullet highlights (i18n: pricing.plans.{id}.highlights.{key}) */
