@@ -1,0 +1,799 @@
+import PDFDocument from 'pdfkit';
+import type { Response } from 'express';
+import type { PdfDocumentTemplate } from '../generated/prisma/index.js';
+import { amountToFrenchWords } from '../lib/amountInWords.js';
+import type { DocumentLangCode } from '../lib/documentLanguage.js';
+import {
+  formatDocumentDate,
+  getDocumentPdfLabels,
+  type DocumentPdfLabels,
+} from '../lib/documentPdfLabels.js';
+import {
+  SIDE_MARGIN,
+  finalizeBufferedFooters,
+  contentMaxY,
+  drawSoftfactureWatermark,
+  tableColsClassic,
+  tableColsModern,
+  tableColsMinimal,
+  pageContentRight,
+} from './pdfLayout.js';
+import { drawOrgLogo } from '../lib/pdfLogo.js';
+
+export type QuotePdfInput = {
+  number: string;
+  documentLanguage?: DocumentLangCode;
+  issueDate: Date;
+  validUntil: Date | null;
+  notes?: string | null;
+  currency: string;
+  applyVat?: boolean;
+  applyFiscalStamp?: boolean;
+  fiscalStamp?: string;
+  discountEnabled?: boolean;
+  discountRate?: string;
+  showCurrencyOnLines?: boolean;
+  template: PdfDocumentTemplate;
+  accentColor?: string;
+  footerText?: string | null;
+  defaultFooterLine: string;
+  showWatermark?: boolean;
+  org: {
+    name: string;
+    logoUrl: string | null;
+    taxMatricule: string | null;
+    address: string | null;
+    city: string | null;
+  };
+  client: { name: string; taxId: string | null };
+  lines: {
+    description: string;
+    quantity: string;
+    unitPriceHt: string;
+    taxRate: string;
+    lineTotalHt: string;
+    lineVat: string;
+    lineTotalTtc: string;
+  }[];
+  subtotalHt: string;
+  vatTotal: string;
+  totalTtc: string;
+};
+
+function quoteFooterDisplay(q: QuotePdfInput): string {
+  return q.footerText && q.footerText.trim().length > 0 ? q.footerText.trim() : q.defaultFooterLine;
+}
+
+function pdfLang(q: QuotePdfInput): DocumentLangCode {
+  return q.documentLanguage ?? 'fr';
+}
+
+function docAccent(q: QuotePdfInput): string {
+  return q.accentColor ?? '#0f766e';
+}
+
+function moneyText(amount: string, currency: string, showCurrency = true): string {
+  return showCurrency ? `${amount} ${currency}` : amount;
+}
+
+function drawAmountInWordsBox(
+  doc: InstanceType<typeof PDFDocument>,
+  q: QuotePdfInput,
+  amount: string,
+  currency: string,
+  y: number,
+  L: DocumentPdfLabels
+): number {
+  if (y + 28 > contentMaxY(doc)) return y;
+  const width = doc.page.width - 2 * SIDE_MARGIN;
+  doc.roundedRect(SIDE_MARGIN, y, width, 26, 3).fill('#f8fafc');
+  const lang = pdfLang(q);
+  const words =
+    lang === 'fr'
+      ? amountToFrenchWords(amount, currency)
+      : `${L.amountInWordsTitle}: ${amount} ${currency}`;
+  doc
+    .fillColor('#334155')
+    .fontSize(9)
+    .font('Helvetica-Oblique')
+    .text(words, SIDE_MARGIN + 10, y + 8, {
+      width: width - 20,
+      align: 'center',
+      lineBreak: false,
+    });
+  doc.font('Helvetica');
+  return y + 34;
+}
+
+function drawNoteBox(
+  doc: InstanceType<typeof PDFDocument>,
+  notes: string | null | undefined,
+  y: number,
+  L: DocumentPdfLabels
+): number {
+  const text = notes?.trim();
+  if (!text) return y;
+  if (y + 54 > contentMaxY(doc)) return y;
+  const width = doc.page.width - 2 * SIDE_MARGIN;
+  doc.roundedRect(SIDE_MARGIN, y, width, 46, 4).fill('#f8fafc').stroke('#e2e8f0');
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(8)
+    .fillColor('#475569')
+    .text(L.note, SIDE_MARGIN + 10, y + 8, {
+      lineBreak: false,
+    });
+  doc
+    .font('Helvetica')
+    .fontSize(8)
+    .fillColor('#334155')
+    .text(text, SIDE_MARGIN + 10, y + 22, {
+      width: width - 20,
+      height: 18,
+      lineBreak: false,
+    });
+  return y + 54;
+}
+
+function drawTableHeaderClassic(
+  doc: InstanceType<typeof PDFDocument>,
+  y: number,
+  L: DocumentPdfLabels,
+  accent: string
+): number {
+  const c = tableColsClassic(doc);
+  doc.save();
+  doc.rect(0, y, doc.page.width, 24).fill(accent);
+  doc.restore();
+  doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold');
+  doc.text(L.description, c.descX, y + 8, { width: c.descW, lineBreak: false });
+  doc.text(L.unitPrice, c.puX, y + 8, { width: c.puW, align: 'right', lineBreak: false });
+  doc.text(L.qty, c.qtyX, y + 8, { width: c.qtyW, align: 'center', lineBreak: false });
+  doc.text(L.vat, c.vatX, y + 8, { width: c.vatW, align: 'center', lineBreak: false });
+  doc.text(L.total, c.totalX, y + 8, { width: c.totalW, align: 'right', lineBreak: false });
+  doc.font('Helvetica');
+  return y + 28;
+}
+
+function drawLinesClassic(
+  doc: InstanceType<typeof PDFDocument>,
+  lines: QuotePdfInput['lines'],
+  tableTopY: number,
+  currency: string,
+  showCurrency: boolean,
+  L: DocumentPdfLabels,
+  accent: string
+): number {
+  const c = tableColsClassic(doc);
+  let y = drawTableHeaderClassic(doc, tableTopY, L, accent);
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (y + 28 > contentMaxY(doc)) {
+      doc.addPage();
+      y = drawTableHeaderClassic(doc, SIDE_MARGIN, L, accent);
+    }
+    if (i % 2 === 0) {
+      doc.rect(c.left, y - 2, c.width, 24).fill('#f8fafc');
+    }
+    doc.fillColor('#1e293b').fontSize(9);
+    doc.text(l.description, c.descX, y + 4, { width: c.descW, lineBreak: false });
+    doc.text(moneyText(l.unitPriceHt, currency, showCurrency), c.puX, y + 4, {
+      width: c.puW,
+      align: 'right',
+      lineBreak: false,
+    });
+    doc.text(l.quantity, c.qtyX, y + 4, { width: c.qtyW, align: 'center', lineBreak: false });
+    doc.text(`${l.taxRate}%`, c.vatX, y + 4, { width: c.vatW, align: 'center', lineBreak: false });
+    doc
+      .font('Helvetica-Bold')
+      .text(moneyText(l.lineTotalTtc, currency, showCurrency), c.totalX, y + 4, {
+        width: c.totalW,
+        align: 'right',
+        lineBreak: false,
+      });
+    doc.font('Helvetica');
+    y += 24;
+  }
+  doc.moveTo(c.left, y).lineTo(c.right, y).stroke('#e2e8f0');
+  return y;
+}
+
+/** Même mise en page CLASSIC que les factures (émetteurs / tableau / totaux). */
+function renderClassic(doc: InstanceType<typeof PDFDocument>, q: QuotePdfInput): void {
+  const L = getDocumentPdfLabels(pdfLang(q));
+  const accent = docAccent(q);
+  const w = doc.page.width;
+  const rightCol = w - SIDE_MARGIN;
+
+  const hasLogo = drawOrgLogo(doc, q.org.logoUrl, SIDE_MARGIN, SIDE_MARGIN - 10, {
+    fit: [190, 78],
+  });
+  if (!hasLogo) {
+    doc
+      .fontSize(14)
+      .font('Helvetica-Bold')
+      .fillColor(accent)
+      .text(q.org.name, SIDE_MARGIN, SIDE_MARGIN, { lineBreak: false });
+  }
+  doc.font('Helvetica');
+
+  doc
+    .fontSize(28)
+    .font('Helvetica-Bold')
+    .fillColor(accent)
+    .text(L.quote, SIDE_MARGIN, SIDE_MARGIN, {
+      width: w - 2 * SIDE_MARGIN,
+      align: 'right',
+      lineBreak: false,
+    });
+  doc
+    .font('Helvetica')
+    .fontSize(10)
+    .fillColor('#475569')
+    .text(`${L.numberPrefix} ${q.number}`, SIDE_MARGIN, SIDE_MARGIN + 34, {
+      width: w - 2 * SIDE_MARGIN,
+      align: 'right',
+      lineBreak: false,
+    });
+  doc.text(
+    `${L.date}: ${formatDocumentDate(q.issueDate, pdfLang(q))}`,
+    SIDE_MARGIN,
+    SIDE_MARGIN + 48,
+    {
+      width: w - 2 * SIDE_MARGIN,
+      align: 'right',
+      lineBreak: false,
+    }
+  );
+  if (q.validUntil) {
+    doc.text(
+      `${L.validUntil}: ${formatDocumentDate(q.validUntil, pdfLang(q))}`,
+      SIDE_MARGIN,
+      SIDE_MARGIN + 62,
+      {
+        width: w - 2 * SIDE_MARGIN,
+        align: 'right',
+        lineBreak: false,
+      }
+    );
+  }
+
+  const boxTop = SIDE_MARGIN + (q.validUntil ? 90 : 75);
+  const boxW = (w - 2 * SIDE_MARGIN - 20) / 2;
+  const boxH = 90;
+
+  doc.rect(SIDE_MARGIN, boxTop, boxW, boxH).stroke('#e2e8f0');
+  doc.rect(SIDE_MARGIN, boxTop, boxW, 20).fill(accent);
+  doc
+    .fillColor('#ffffff')
+    .fontSize(9)
+    .font('Helvetica-Bold')
+    .text(L.issuer, SIDE_MARGIN + 10, boxTop + 6, { lineBreak: false });
+  doc.font('Helvetica').fillColor('#1e293b').fontSize(10);
+  let ey = boxTop + 28;
+  doc.font('Helvetica-Bold').text(q.org.name, SIDE_MARGIN + 10, ey, { lineBreak: false });
+  doc.font('Helvetica').fontSize(9).fillColor('#475569');
+  ey += 14;
+  if (q.org.address) {
+    doc.text(q.org.address, SIDE_MARGIN + 10, ey, { lineBreak: false });
+    ey += 12;
+  }
+  if (q.org.city) {
+    doc.text(q.org.city, SIDE_MARGIN + 10, ey, { lineBreak: false });
+    ey += 12;
+  }
+  if (q.org.taxMatricule) {
+    doc.text(`${L.mf}: ${q.org.taxMatricule}`, SIDE_MARGIN + 10, ey, { lineBreak: false });
+  }
+
+  const destX = SIDE_MARGIN + boxW + 20;
+  doc.rect(destX, boxTop, boxW, boxH).stroke('#e2e8f0');
+  doc.rect(destX, boxTop, boxW, 20).fill(accent);
+  doc
+    .fillColor('#ffffff')
+    .fontSize(9)
+    .font('Helvetica-Bold')
+    .text(L.recipient, destX + 10, boxTop + 6, { lineBreak: false });
+  doc.font('Helvetica').fillColor('#1e293b').fontSize(10);
+  let dy = boxTop + 28;
+  doc.font('Helvetica-Bold').text(q.client.name, destX + 10, dy, { lineBreak: false });
+  doc.font('Helvetica').fontSize(9).fillColor('#475569');
+  dy += 14;
+  if (q.client.taxId) {
+    doc.text(`${L.mf}: ${q.client.taxId}`, destX + 10, dy, { lineBreak: false });
+  }
+
+  const tableTop = boxTop + boxH + 25;
+  const afterTable = drawLinesClassic(
+    doc,
+    q.lines,
+    tableTop,
+    q.currency,
+    q.showCurrencyOnLines ?? true,
+    L,
+    accent
+  );
+
+  let yTotals = afterTable + 20;
+  if (yTotals + 100 > contentMaxY(doc)) {
+    doc.addPage();
+    yTotals = SIDE_MARGIN + 40;
+  }
+
+  const totalsX = 340;
+  const totalsW = rightCol - totalsX;
+
+  doc.fillColor('#475569').fontSize(10);
+  doc.text(L.subtotalHt, totalsX, yTotals, {
+    width: totalsW - 90,
+    align: 'right',
+    lineBreak: false,
+  });
+  doc.text(`${q.subtotalHt} ${q.currency}`, totalsX + totalsW - 85, yTotals, {
+    width: 85,
+    align: 'right',
+    lineBreak: false,
+  });
+
+  doc.text(L.vatLine, totalsX, yTotals + 18, {
+    width: totalsW - 90,
+    align: 'right',
+    lineBreak: false,
+  });
+  doc.text(`${q.vatTotal} ${q.currency}`, totalsX + totalsW - 85, yTotals + 18, {
+    width: 85,
+    align: 'right',
+    lineBreak: false,
+  });
+
+  const totalRowY = yTotals + 40;
+  doc.rect(totalsX, totalRowY, totalsW, 24).fill(accent);
+  doc.fillColor('#ffffff').fontSize(11).font('Helvetica-Bold');
+  doc.text(L.totalLabel, totalsX + 10, totalRowY + 6, {
+    width: totalsW - 105,
+    align: 'right',
+    lineBreak: false,
+  });
+  doc.text(`${q.totalTtc} ${q.currency}`, totalsX + totalsW - 85, totalRowY + 6, {
+    width: 80,
+    align: 'right',
+    lineBreak: false,
+  });
+  doc.font('Helvetica');
+
+  const afterWordsY = drawAmountInWordsBox(doc, q, q.totalTtc, q.currency, totalRowY + 36, L);
+  drawNoteBox(doc, q.notes, afterWordsY + 6, L);
+}
+
+function drawTableHeaderModern(
+  doc: InstanceType<typeof PDFDocument>,
+  y: number,
+  L: DocumentPdfLabels,
+  accent: string
+): number {
+  const c = tableColsModern(doc);
+  doc.save();
+  doc.rect(0, y, doc.page.width, 26).fill(accent);
+  doc.restore();
+  doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold');
+  doc.text(L.service, c.descX, y + 9, { width: c.descW, lineBreak: false });
+  doc.text(L.qty, c.qtyX, y + 9, { width: c.qtyW, align: 'right', lineBreak: false });
+  doc.text(L.unitPriceShort, c.unitX, y + 9, { width: c.unitW, align: 'right', lineBreak: false });
+  doc.text(L.total, c.totalX, y + 9, { width: c.totalW, align: 'right', lineBreak: false });
+  doc.font('Helvetica');
+  return y + 28;
+}
+
+function drawLinesModern(
+  doc: InstanceType<typeof PDFDocument>,
+  lines: QuotePdfInput['lines'],
+  tableTopY: number,
+  currency: string,
+  showCurrency: boolean,
+  L: DocumentPdfLabels,
+  accent: string
+): number {
+  const c = tableColsModern(doc);
+  let y = drawTableHeaderModern(doc, tableTopY, L, accent);
+  for (const l of lines) {
+    if (y + 22 > contentMaxY(doc)) {
+      doc.addPage();
+      y = drawTableHeaderModern(doc, SIDE_MARGIN, L, accent);
+    }
+    doc.fillColor('#1f2937').fontSize(9).font('Helvetica-Bold');
+    doc.text(l.description, c.descX, y, { width: c.descW, lineBreak: false });
+    doc.fillColor('#94a3b8').font('Helvetica-Bold');
+    doc.text(l.quantity, c.qtyX, y, { width: c.qtyW, align: 'right', lineBreak: false });
+    doc.text(moneyText(l.unitPriceHt, currency, showCurrency), c.unitX, y, {
+      width: c.unitW,
+      align: 'right',
+      lineBreak: false,
+    });
+    doc.fillColor('#1f2937');
+    doc.text(moneyText(l.lineTotalTtc, currency, showCurrency), c.totalX, y, {
+      width: c.totalW,
+      align: 'right',
+      lineBreak: false,
+    });
+    doc
+      .moveTo(c.left, y + 22)
+      .lineTo(c.right, y + 22)
+      .stroke('#e2e8f0');
+    y += 34;
+  }
+  return y;
+}
+
+function renderModern(doc: InstanceType<typeof PDFDocument>, q: QuotePdfInput): void {
+  const L = getDocumentPdfLabels(pdfLang(q));
+  const accent = docAccent(q);
+  const w = doc.page.width;
+  const blue = accent;
+  const lightBlue = '#dbeafe';
+  const top = SIDE_MARGIN + 28;
+
+  const hasLogo = drawOrgLogo(doc, q.org.logoUrl, SIDE_MARGIN, top - 10, { fit: [190, 70] });
+  if (!hasLogo) {
+    doc
+      .fontSize(18)
+      .font('Helvetica-Bold')
+      .fillColor(blue)
+      .text(q.org.name.toUpperCase(), SIDE_MARGIN, top, { width: 260, lineBreak: false });
+  }
+  doc
+    .fontSize(9)
+    .font('Helvetica')
+    .fillColor('#64748b')
+    .text([q.org.address, q.org.city].filter(Boolean).join(', '), SIDE_MARGIN, top + 26, {
+      width: 260,
+      lineBreak: false,
+    });
+
+  doc
+    .fontSize(26)
+    .font('Helvetica-Bold')
+    .fillColor('#0f172a')
+    .text(L.quote, SIDE_MARGIN, top - 8, {
+      width: w - 2 * SIDE_MARGIN,
+      align: 'right',
+      lineBreak: false,
+    });
+  doc
+    .fontSize(9)
+    .font('Helvetica-Bold')
+    .fillColor(blue)
+    .text(`${L.numberPrefix} ${q.number}`, SIDE_MARGIN, top + 25, {
+      width: w - 2 * SIDE_MARGIN,
+      align: 'right',
+      lineBreak: false,
+    });
+
+  const metaY = top + 70;
+  doc
+    .moveTo(SIDE_MARGIN, metaY)
+    .lineTo(w - SIDE_MARGIN, metaY)
+    .stroke(blue);
+  doc.rect(SIDE_MARGIN, metaY + 1, w - 2 * SIDE_MARGIN, 40).fill(lightBlue);
+  const meta = [
+    [L.issueDate, formatDocumentDate(q.issueDate, pdfLang(q))],
+    [L.validUntil, q.validUntil ? formatDocumentDate(q.validUntil, pdfLang(q)) : '-'],
+    [L.currency, q.currency],
+  ];
+  meta.forEach(([label, value], index) => {
+    const x = SIDE_MARGIN + 12 + index * 128;
+    doc
+      .fontSize(7)
+      .font('Helvetica-Bold')
+      .fillColor(blue)
+      .text(label, x, metaY + 12, { width: 110 });
+    doc
+      .fontSize(9)
+      .fillColor('#1f2937')
+      .text(value, x, metaY + 25, { width: 110, lineBreak: false });
+  });
+
+  const partyY = metaY + 78;
+  doc
+    .moveTo(SIDE_MARGIN, partyY)
+    .lineTo(SIDE_MARGIN, partyY + 58)
+    .stroke(blue);
+  doc
+    .fontSize(7)
+    .font('Helvetica-Bold')
+    .fillColor(blue)
+    .text(L.from, SIDE_MARGIN + 12, partyY + 8);
+  doc
+    .fontSize(10)
+    .fillColor('#1f2937')
+    .text(q.org.name, SIDE_MARGIN + 12, partyY + 24, {
+      width: 210,
+      lineBreak: false,
+    });
+  doc.fontSize(8).fillColor('#64748b').font('Helvetica');
+  if (q.org.address)
+    doc.text(q.org.address, SIDE_MARGIN + 12, partyY + 39, { width: 210, lineBreak: false });
+  if (q.org.taxMatricule)
+    doc.text(`${L.mf} ${q.org.taxMatricule}`, SIDE_MARGIN + 12, partyY + 51, { width: 210 });
+
+  const clientX = SIDE_MARGIN + 280;
+  doc
+    .moveTo(clientX, partyY)
+    .lineTo(clientX, partyY + 58)
+    .stroke('#93c5fd');
+  doc
+    .fontSize(7)
+    .font('Helvetica-Bold')
+    .fillColor(blue)
+    .text(L.to, clientX + 12, partyY + 8);
+  doc
+    .fontSize(10)
+    .fillColor('#1f2937')
+    .text(q.client.name, clientX + 12, partyY + 24, {
+      width: 210,
+      lineBreak: false,
+    });
+  if (q.client.taxId)
+    doc
+      .fontSize(8)
+      .fillColor('#64748b')
+      .text(`${L.mf} ${q.client.taxId}`, clientX + 12, partyY + 39);
+
+  const afterTable = drawLinesModern(
+    doc,
+    q.lines,
+    partyY + 96,
+    q.currency,
+    q.showCurrencyOnLines ?? true,
+    L,
+    accent
+  );
+  let yTotals = afterTable + 22;
+  if (yTotals + 108 > contentMaxY(doc)) {
+    doc.addPage();
+    yTotals = SIDE_MARGIN + 36;
+  }
+  const totalsX = w - SIDE_MARGIN - 205;
+  doc.fontSize(9).font('Helvetica-Bold').fillColor('#94a3b8');
+  doc.text(L.subtotalHt.replace(':', ''), totalsX, yTotals, { width: 92, lineBreak: false });
+  doc.text(`${q.subtotalHt} ${q.currency}`, totalsX + 105, yTotals, {
+    width: 100,
+    align: 'right',
+    lineBreak: false,
+  });
+  doc.text(L.vat, totalsX, yTotals + 22, { width: 92, lineBreak: false });
+  doc.text(`${q.vatTotal} ${q.currency}`, totalsX + 105, yTotals + 22, {
+    width: 100,
+    align: 'right',
+    lineBreak: false,
+  });
+  doc.rect(totalsX - 8, yTotals + 44, 213, 28).fill(lightBlue);
+  doc.fontSize(11).font('Helvetica-Bold').fillColor(blue);
+  doc.text(L.totalTtc, totalsX, yTotals + 52, { width: 90, lineBreak: false });
+  doc.text(`${q.totalTtc} ${q.currency}`, totalsX + 95, yTotals + 52, {
+    width: 105,
+    align: 'right',
+    lineBreak: false,
+  });
+  const afterWordsY = drawAmountInWordsBox(doc, q, q.totalTtc, q.currency, yTotals + 88, L);
+  drawNoteBox(doc, q.notes, afterWordsY + 6, L);
+}
+
+function drawTableHeaderMinimal(
+  doc: InstanceType<typeof PDFDocument>,
+  y: number,
+  L: DocumentPdfLabels
+): number {
+  const c = tableColsMinimal(doc);
+  doc.save();
+  doc.rect(0, y, doc.page.width, 28).fill('#1a1a1a');
+  doc.restore();
+  doc.fillColor('#ffffff').fontSize(8).font('Helvetica-Bold');
+  doc.text(L.description, c.descX, y + 10, { width: c.descW, lineBreak: false });
+  doc.text(L.qty, c.qtyX, y + 10, { width: c.qtyW, align: 'right', lineBreak: false });
+  doc.text(L.unitPriceShort, c.unitX, y + 10, {
+    width: c.unitW,
+    align: 'right',
+    lineBreak: false,
+  });
+  doc.text(L.amount, c.amountX, y + 10, { width: c.amountW, align: 'right', lineBreak: false });
+  doc.font('Helvetica');
+  return y + 28;
+}
+
+function drawLinesMinimal(
+  doc: InstanceType<typeof PDFDocument>,
+  lines: QuotePdfInput['lines'],
+  tableTopY: number,
+  currency: string,
+  showCurrency: boolean,
+  L: DocumentPdfLabels
+): number {
+  const c = tableColsMinimal(doc);
+  let y = drawTableHeaderMinimal(doc, tableTopY, L);
+  for (const l of lines) {
+    if (y + 22 > contentMaxY(doc)) {
+      doc.addPage();
+      y = drawTableHeaderMinimal(doc, SIDE_MARGIN, L);
+    }
+    if (((y - tableTopY - 28) / 22) % 2 === 1) {
+      doc.rect(c.left, y - 4, c.width, 22).fill('#f7f7f7');
+    }
+    doc.fillColor('#525252').fontSize(9);
+    doc.text(l.description, c.descX, y + 2, { width: c.descW, lineBreak: false });
+    doc.text(l.quantity, c.qtyX, y + 2, { width: c.qtyW, align: 'right', lineBreak: false });
+    doc.text(moneyText(l.unitPriceHt, currency, showCurrency), c.unitX, y + 2, {
+      width: c.unitW,
+      align: 'right',
+      lineBreak: false,
+    });
+    doc.text(moneyText(l.lineTotalTtc, currency, showCurrency), c.amountX, y + 2, {
+      width: c.amountW,
+      align: 'right',
+      lineBreak: false,
+    });
+    doc
+      .moveTo(c.left, y + 18)
+      .lineTo(c.right, y + 18)
+      .stroke('#e5e5e5');
+    y += 22;
+  }
+  return y;
+}
+
+function renderMinimal(doc: InstanceType<typeof PDFDocument>, q: QuotePdfInput): void {
+  const L = getDocumentPdfLabels(pdfLang(q));
+  const w = doc.page.width;
+  const top = SIDE_MARGIN + 35;
+
+  const hasLogo = drawOrgLogo(doc, q.org.logoUrl, SIDE_MARGIN, top - 12, { fit: [190, 78] });
+  if (!hasLogo) {
+    doc
+      .fontSize(20)
+      .font('Helvetica-Bold')
+      .fillColor('#2f2f2f')
+      .text(q.org.name.toUpperCase(), SIDE_MARGIN, top, { width: 260, lineBreak: false });
+  }
+  doc
+    .fontSize(9)
+    .font('Helvetica')
+    .fillColor('#8a8a8a')
+    .text(q.org.taxMatricule ? `${L.mf} ${q.org.taxMatricule}` : '', SIDE_MARGIN, top + 28, {
+      width: 240,
+      lineBreak: false,
+    });
+
+  doc
+    .fontSize(26)
+    .font('Helvetica-Bold')
+    .fillColor('#2f2f2f')
+    .text(L.quote, SIDE_MARGIN, top - 8, {
+      width: w - 2 * SIDE_MARGIN,
+      align: 'right',
+      lineBreak: false,
+    });
+  doc
+    .fontSize(9)
+    .font('Helvetica')
+    .fillColor('#8a8a8a')
+    .text(`${L.numberPrefix} ${q.number}`, SIDE_MARGIN, top + 25, {
+      width: w - 2 * SIDE_MARGIN,
+      align: 'right',
+      lineBreak: false,
+    });
+
+  doc
+    .moveTo(SIDE_MARGIN, top + 72)
+    .lineTo(w - SIDE_MARGIN, top + 72)
+    .stroke('#2f2f2f');
+
+  const infoY = top + 92;
+  doc.fontSize(8).fillColor('#9a9a9a').font('Helvetica-Bold').text(L.quoteFor, SIDE_MARGIN, infoY);
+  doc
+    .fontSize(11)
+    .fillColor('#333333')
+    .text(q.client.name, SIDE_MARGIN, infoY + 16, { width: 240, lineBreak: false });
+  if (q.client.taxId)
+    doc
+      .fontSize(9)
+      .fillColor('#555555')
+      .text(`${L.mf} ${q.client.taxId}`, SIDE_MARGIN, infoY + 34);
+
+  const metaX = w - SIDE_MARGIN - 210;
+  const rowH = 20;
+  const metaRows = [
+    [L.date.toUpperCase(), formatDocumentDate(q.issueDate, pdfLang(q))],
+    [L.validUntil, q.validUntil ? formatDocumentDate(q.validUntil, pdfLang(q)) : '-'],
+    [L.currency, q.currency],
+  ];
+  metaRows.forEach(([label, value], index) => {
+    const y = infoY + index * rowH;
+    doc.rect(metaX, y, 210, rowH).fill(index % 2 === 0 ? '#f2f2f2' : '#ffffff');
+    doc
+      .fontSize(8)
+      .fillColor('#8a8a8a')
+      .font('Helvetica')
+      .text(label, metaX + 8, y + 6);
+    doc
+      .fontSize(8)
+      .fillColor('#333333')
+      .text(value, metaX + 90, y + 6, {
+        width: 110,
+        align: 'right',
+        lineBreak: false,
+      });
+  });
+
+  const afterTable = drawLinesMinimal(
+    doc,
+    q.lines,
+    infoY + 120,
+    q.currency,
+    q.showCurrencyOnLines ?? true,
+    L
+  );
+  let yTotals = afterTable + 32;
+  if (yTotals + 115 > contentMaxY(doc)) {
+    doc.addPage();
+    yTotals = SIDE_MARGIN + 32;
+  }
+  const right = pageContentRight(doc);
+  const totalsBoxW = 200;
+  const totalsX = right - totalsBoxW + 10;
+  doc.fontSize(9).fillColor('#555555').font('Helvetica');
+  doc.text(L.subtotalHt.replace(':', ''), totalsX, yTotals, { width: 80, lineBreak: false });
+  doc.text(`${q.subtotalHt} ${q.currency}`, totalsX + 80, yTotals, {
+    width: 110,
+    align: 'right',
+    lineBreak: false,
+  });
+  doc.text(L.vat, totalsX, yTotals + 26, { width: 80, lineBreak: false });
+  doc.text(`${q.vatTotal} ${q.currency}`, totalsX + 80, yTotals + 26, {
+    width: 110,
+    align: 'right',
+    lineBreak: false,
+  });
+  doc.save();
+  doc.rect(right - totalsBoxW, yTotals + 52, totalsBoxW, 36).fill('#1a1a1a');
+  doc.restore();
+  doc.fontSize(10).fillColor('#ffffff').font('Helvetica-Bold');
+  doc.text(L.totalTtc, right - totalsBoxW + 12, yTotals + 64, {
+    width: 78,
+    lineBreak: false,
+  });
+  doc.text(`${q.totalTtc} ${q.currency}`, right - totalsBoxW + 90, yTotals + 64, {
+    width: totalsBoxW - 102,
+    align: 'right',
+    lineBreak: false,
+  });
+  const afterWordsY = drawAmountInWordsBox(doc, q, q.totalTtc, q.currency, yTotals + 104, L);
+  drawNoteBox(doc, q.notes, afterWordsY + 6, L);
+}
+
+export function streamQuotePdf(res: Response, q: QuotePdfInput) {
+  const safe = q.number.replace(/[^\w.-]/g, '_');
+  const filename = `${safe}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+  const doc = new PDFDocument({ margin: SIDE_MARGIN, size: 'A4', bufferPages: true });
+  doc.pipe(res);
+
+  const template =
+    q.template === 'BLUE_PRO' ? 'MODERN' : q.template === 'MONO' ? 'MINIMAL' : q.template;
+  switch (template) {
+    case 'MODERN':
+      renderModern(doc, q);
+      break;
+    case 'MINIMAL':
+      renderMinimal(doc, q);
+      break;
+    default:
+      renderClassic(doc, q);
+  }
+
+  finalizeBufferedFooters(doc, quoteFooterDisplay(q));
+  if (q.showWatermark) {
+    drawSoftfactureWatermark(doc);
+  }
+  doc.end();
+}
