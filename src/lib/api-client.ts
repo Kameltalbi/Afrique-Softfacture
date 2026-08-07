@@ -204,6 +204,52 @@ export async function downloadInvoiceFacturXXmlFromApi(invoiceId: string, filena
   triggerBlobDownload(blob, name);
 }
 
+/** Export TEIF Tunisie (XML non signé). */
+export async function downloadInvoiceTeifXmlFromApi(invoiceId: string, filename: string) {
+  const url = `${getApiBase()}/invoices/${invoiceId}/teif.xml`;
+  const token = getToken();
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(formatDownloadError(t, res.status, res.statusText));
+  }
+  const blob = await res.blob();
+  const name = filename.endsWith('.xml') ? filename : `${filename.replace(/\.pdf$/i, '')}-teif.xml`;
+  triggerBlobDownload(blob, name);
+}
+
+export async function transmitInvoiceTeifFromApi(invoiceId: string) {
+  return apiFetch<{
+    transmission: unknown;
+    qrPlaceholder?: string;
+    note?: string;
+  }>(`/invoices/${invoiceId}/einvoice/teif/transmit`, { method: 'POST' });
+}
+
+/** Émettre la e-facture TEIF (hash + Digigo + TTN + traçabilité). */
+export async function emitInvoiceTeifFromApi(invoiceId: string) {
+  return apiFetch<{
+    invoice: {
+      id: string;
+      number: string | null;
+      teifEInvoiceStatus: string;
+      teifContentHash: string | null;
+      teifSignature: string | null;
+      teifSignedAt: string | null;
+      digigoSessionId: string | null;
+      digigoCredentialId: string | null;
+      ttnReference: string | null;
+      ttnSubmittedAt: string | null;
+    };
+    transmission: unknown;
+    signMode: 'simulation' | 'production';
+    ttnChannel: 'proxy' | 'mock';
+    note?: string;
+  }>(`/invoices/${invoiceId}/einvoice/teif/emit`, { method: 'POST' });
+}
+
 export async function downloadQuotePdfFromApi(quoteId: string, filename: string) {
   const url = `${getApiBase()}/quotes/${quoteId}/pdf`;
   const token = getToken();

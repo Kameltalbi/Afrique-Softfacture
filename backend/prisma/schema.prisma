@@ -134,6 +134,18 @@ enum InvoiceOperationNature {
 enum PaProvider {
   NONE
   MOCK
+  TTN
+}
+
+/** Cycle de vie e-facture TEIF Tunisie (El Fatoora). */
+enum TeifEInvoiceStatus {
+  NONE
+  GENERATED
+  HASHED
+  SIGNING
+  SIGNED
+  TRANSMITTED
+  REJECTED
 }
 
 /** Statuts cycle de vie côté PA (DGFiP). */
@@ -250,6 +262,7 @@ model Organization {
   einvoiceTransmissions EInvoiceTransmission[]
   receivedInvoices      ReceivedInvoice[]
   invoiceAuditLogs      InvoiceAuditLog[]
+  expenseReports        ExpenseReport[]
 }
 
 model UserInvitation {
@@ -306,6 +319,7 @@ model User {
   organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   invitationsSent  UserInvitation[] @relation("InvitationsSent")
   passwordResets   PasswordReset[]
+  expenseReports   ExpenseReport[] @relation("ExpenseReportCreator")
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -433,6 +447,10 @@ model Invoice {
   applyVat       Boolean       @default(true)
   applyFiscalStamp Boolean     @default(false)
   fiscalStamp    Decimal       @default(1.000) @db.Decimal(14, 3)
+  /** Retenue à la source (profil conformité Tunisie). */
+  applyWithholding Boolean     @default(false)
+  withholdingRate  Decimal     @default(0) @db.Decimal(5, 2)
+  withholdingAmount Decimal    @default(0) @db.Decimal(14, 3)
   discountEnabled Boolean      @default(false)
   discountRate   Decimal       @default(0) @db.Decimal(5, 2)
   showCurrencyOnLines Boolean  @default(true)
@@ -448,6 +466,17 @@ model Invoice {
   subtotalHt     Decimal       @db.Decimal(14, 3)
   vatTotal       Decimal       @db.Decimal(14, 3)
   totalTtc       Decimal       @db.Decimal(14, 3)
+  /** E-facture TEIF Tunisie — traçabilité */
+  teifEInvoiceStatus TeifEInvoiceStatus @default(NONE)
+  teifXml            String?   @db.Text
+  teifContentHash    String?
+  teifSignature      String?   @db.Text
+  teifSignedAt       DateTime?
+  digigoSessionId    String?
+  digigoCredentialId String?
+  ttnReference       String?
+  ttnSubmittedAt     DateTime?
+  teifLastError      String?
   quoteId        String?       @unique
   sourceQuote    Quote?        @relation("QuoteToInvoice", fields: [quoteId], references: [id], onDelete: SetNull)
   recurringInvoiceId String?
@@ -466,6 +495,7 @@ model Invoice {
   @@unique([organizationId, number])
   @@index([organizationId])
   @@index([organizationId, status])
+  @@index([organizationId, teifEInvoiceStatus])
   @@index([recurringInvoiceId])
 }
 
@@ -698,3 +728,71 @@ model InvoiceAuditLog {
   @@index([organizationId])
   @@index([organizationId, validatedAt])
 }
+
+enum ExpenseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  REIMBURSED
+}
+
+enum ExpenseCategory {
+  MEALS
+  TRANSPORT
+  ACCOMMODATION
+  SUPPLIES
+  TELECOM
+  OTHER
+}
+
+/** Note de frais — module indépendant (SoftFacture Afrique). */
+model ExpenseReport {
+  id              String        @id @default(cuid())
+  organizationId  String
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById     String?
+  createdBy       User?         @relation("ExpenseReportCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  title           String
+  number          String?
+  status          ExpenseStatus @default(DRAFT)
+  currency        String        @default("TND")
+  expenseDate     DateTime      @db.Date
+  notes           String?       @db.Text
+  subtotalHt      Decimal       @default(0) @db.Decimal(14, 3)
+  vatTotal        Decimal       @default(0) @db.Decimal(14, 3)
+  totalTtc        Decimal       @default(0) @db.Decimal(14, 3)
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  reimbursedAt    DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  lines           ExpenseLine[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([createdById])
+}
+
+model ExpenseLine {
+  id          String          @id @default(cuid())
+  reportId    String
+  report      ExpenseReport   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  expenseDate DateTime        @db.Date
+  category    ExpenseCategory @default(OTHER)
+  description String
+  vendor      String?
+  amountHt    Decimal         @db.Decimal(14, 3)
+  taxRate     Decimal         @default(0) @db.Decimal(5, 2)
+  vatAmount   Decimal         @default(0) @db.Decimal(14, 3)
+  amountTtc   Decimal         @db.Decimal(14, 3)
+  sortOrder   Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([reportId])
+}
+

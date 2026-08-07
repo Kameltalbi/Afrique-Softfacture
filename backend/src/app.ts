@@ -21,6 +21,7 @@ import signatureRoutes from './routes/signature.routes.js';
 import billingProtectedRoutes, { billingPublicRouter } from './routes/billing.routes.js';
 import billingWebhooksRoutes from './routes/billing.webhooks.routes.js';
 import receivedInvoicesRoutes from './routes/receivedInvoices.routes.js';
+import expenseReportsRoutes from './routes/expenseReports.routes.js';
 import paWebhooksRoutes from './routes/pa.webhooks.routes.js';
 import { authMiddleware, requireOrg, requireRoles } from './middleware/auth.js';
 import { requireOnboardingComplete } from './middleware/onboarding.js';
@@ -151,6 +152,13 @@ export function createApp() {
     signatureRoutes
   );
   app.use('/api/dashboard', authMiddleware, requireOrg, requireOnboardingComplete, dashboardRoutes);
+  app.use(
+    '/api/expense-reports',
+    authMiddleware,
+    requireOrg,
+    requireOnboardingComplete,
+    expenseReportsRoutes
+  );
   app.use('/api/billing', billingPublicRouter);
   app.use(
     '/api/billing',

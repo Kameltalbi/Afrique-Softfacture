@@ -7,6 +7,8 @@ import { Menu } from 'lucide-react';
 type MobileLandingMenuLink = {
   href: string;
   label: string;
+  /** Si défini, le lien est regroupé sous ce titre (ex. Produit). */
+  group?: string;
 };
 
 export function MobileLandingMenu({
@@ -47,8 +49,16 @@ export function MobileLandingMenu({
     };
   }, [open]);
 
+  const groups = new Map<string | null, MobileLandingMenuLink[]>();
+  for (const link of links) {
+    const key = link.group ?? null;
+    const list = groups.get(key) ?? [];
+    list.push(link);
+    groups.set(key, list);
+  }
+
   return (
-    <div ref={menuRef} className="relative md:hidden">
+    <div ref={menuRef} className="relative lg:hidden">
       <button
         type="button"
         aria-label="Ouvrir le menu"
@@ -59,16 +69,25 @@ export function MobileLandingMenu({
         <Menu className="h-4 w-4" />
       </button>
       {open && (
-        <nav className="absolute end-0 z-50 mt-2 grid w-64 gap-2 rounded-md border border-slate-200 bg-white p-2 text-sm font-bold text-slate-800 shadow-lg">
-          {links.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="rounded-md px-2 py-2 hover:bg-slate-50"
-              onClick={() => setOpen(false)}
-            >
-              {link.label}
-            </a>
+        <nav className="absolute end-0 z-50 mt-2 grid w-72 gap-1 rounded-xl border border-slate-200 bg-white p-2 text-sm font-semibold text-slate-800 shadow-lg">
+          {[...groups.entries()].map(([group, groupLinks]) => (
+            <div key={group ?? 'root'} className="space-y-0.5">
+              {group ? (
+                <p className="px-2 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                  {group}
+                </p>
+              ) : null}
+              {groupLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="block rounded-md px-2 py-2 hover:bg-slate-50"
+                  onClick={() => setOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
           ))}
           <div className="my-1 h-px bg-slate-200" />
           <Link

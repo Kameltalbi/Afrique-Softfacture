@@ -22,9 +22,12 @@ function nextLocale(current: string): (typeof routing.locales)[number] {
 export function LocaleSwitcher({
   className,
   variant = 'default',
+  showCode = false,
 }: {
   className?: string;
   variant?: 'default' | 'hero';
+  /** Affiche le code langue (FR / EN / AR) à côté du globe. */
+  showCode?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -54,7 +57,11 @@ export function LocaleSwitcher({
       )}
     >
       <Globe className="h-5 w-5" strokeWidth={2} aria-hidden />
-      <span className="sr-only">{meta.label}</span>
+      {showCode ? (
+        <span className="text-xs font-bold uppercase tracking-wide">{active}</span>
+      ) : (
+        <span className="sr-only">{meta.label}</span>
+      )}
     </button>
   );
 }

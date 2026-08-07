@@ -56,10 +56,15 @@ export async function generateMetadata({
 }
 
 export const viewport: Viewport = {
-  themeColor: '#2663eb',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#2663eb' },
+    { media: '(prefers-color-scheme: dark)', color: '#1e3a8a' },
+  ],
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
+  viewportFit: 'cover',
+  colorScheme: 'light',
 };
 
 export default async function LocaleLayout({
@@ -81,7 +86,7 @@ export default async function LocaleLayout({
   return (
     <html lang={locale} dir={isRtl ? 'rtl' : 'ltr'} className={fontClass}>
       <body
-        className={`min-h-screen bg-s-bg text-s-navy antialiased ${isRtl ? 'font-[family-name:var(--font-ar)]' : 'font-sans'}`}
+        className={`min-h-dvh bg-s-bg text-s-navy antialiased ${isRtl ? 'font-[family-name:var(--font-ar)]' : 'font-sans'}`}
       >
         <NextIntlClientProvider messages={messages}>
           <Providers>{children}</Providers>

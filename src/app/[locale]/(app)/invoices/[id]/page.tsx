@@ -9,6 +9,9 @@ import {
   downloadInvoiceFacturXFromApi,
   downloadInvoiceFacturXXmlFromApi,
   downloadInvoicePdfFromApi,
+  downloadInvoiceTeifXmlFromApi,
+  transmitInvoiceTeifFromApi,
+  emitInvoiceTeifFromApi,
 } from '@/lib/api-client';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardTitle } from '@/components/ui/card';
@@ -44,6 +47,15 @@ type PaymentRow = {
   notes: string | null;
 };
 
+type TeifEInvoiceStatus =
+  | 'NONE'
+  | 'GENERATED'
+  | 'HASHED'
+  | 'SIGNING'
+  | 'SIGNED'
+  | 'TRANSMITTED'
+  | 'REJECTED';
+
 type InvDetail = {
   id: string;
   number: string | null;
@@ -69,6 +81,15 @@ type InvDetail = {
   netToPay?: unknown;
   appliedDeposit?: { id: string; number: string | null; totalTtc?: unknown } | null;
   payments?: PaymentRow[];
+  teifEInvoiceStatus?: TeifEInvoiceStatus;
+  teifContentHash?: string | null;
+  teifSignature?: string | null;
+  teifSignedAt?: string | null;
+  digigoSessionId?: string | null;
+  digigoCredentialId?: string | null;
+  ttnReference?: string | null;
+  ttnSubmittedAt?: string | null;
+  teifLastError?: string | null;
   client: {
     name: string;
     siren?: string | null;
@@ -360,11 +381,57 @@ export default function InvoiceDetailPage() {
     }
   }
 
+  async function onDownloadTeif() {
+    if (!inv?.number) return;
+    try {
+      await downloadInvoiceTeifXmlFromApi(inv.id, inv.number);
+      toast.push(t('exportTeifDone'));
+    } catch (e: unknown) {
+      toast.push(e instanceof Error ? e.message : 'Erreur', 'error');
+    }
+  }
+
+  async function transmitTeif() {
+    if (!inv) return;
+    setTransmitPending(true);
+    try {
+      const res = await transmitInvoiceTeifFromApi(inv.id);
+      toast.push(res.note ? `${t('transmitTeifSuccess')} — ${res.note}` : t('transmitTeifSuccess'));
+      await load();
+    } catch (e: unknown) {
+      toast.push(e instanceof Error ? e.message : 'Erreur', 'error');
+    } finally {
+      setTransmitPending(false);
+    }
+  }
+
+  async function emitTeif() {
+    if (!inv) return;
+    setTransmitPending(true);
+    try {
+      const res = await emitInvoiceTeifFromApi(inv.id);
+      toast.push(res.note ? `${t('emitTeifSuccess')} — ${res.note}` : t('emitTeifSuccess'));
+      await load();
+    } catch (e: unknown) {
+      toast.push(e instanceof Error ? e.message : 'Erreur', 'error');
+      await load();
+    } finally {
+      setTransmitPending(false);
+    }
+  }
+
   const canExportFacturX =
     FEATURES.einvoiceUi &&
     Boolean(inv?.number) &&
     inv?.status !== 'DRAFT' &&
     inv?.status !== 'CANCELLED';
+
+  const canExportTeif =
+    Boolean(inv?.number) && inv?.status !== 'DRAFT' && inv?.status !== 'CANCELLED';
+
+  const canEmitTeif = canExportTeif && inv?.teifEInvoiceStatus !== 'TRANSMITTED';
+
+  const teifStatus = inv?.teifEInvoiceStatus ?? 'NONE';
 
   if (!inv) {
     return <p className="text-sm text-s-muted">{tc('loading')}</p>;
@@ -446,6 +513,27 @@ export default function InvoiceDetailPage() {
           <Button type="button" variant="secondary" size="sm" onClick={() => void onDownloadPdf()}>
             {t('exportPdf')}
           </Button>
+          {canEmitTeif ? (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              disabled={transmitPending}
+              onClick={() => void emitTeif()}
+            >
+              {transmitPending ? tc('loading') : t('emitTeif')}
+            </Button>
+          ) : null}
+          {canExportTeif ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => void onDownloadTeif()}
+            >
+              {t('exportTeif')}
+            </Button>
+          ) : null}
           {canExportFacturX ? (
             <>
               <Button
@@ -691,6 +779,85 @@ export default function InvoiceDetailPage() {
                   </Button>
                 </div>
               ) : null}
+            </Card>
+          ) : null}
+
+          {canExportTeif ? (
+            <Card>
+              <CardTitle className="mb-2">{t('teifSectionTitle')}</CardTitle>
+              <p className="mb-3 text-xs text-s-muted">{t('teifSectionHint')}</p>
+              <p className="mb-3 text-sm font-medium text-s-navy">
+                {t(`teifStatus_${teifStatus}` as 'teifStatus_NONE')}
+                {teifStatus === 'TRANSMITTED' ? ` · ${t('emitTeifAlready')}` : null}
+              </p>
+              {inv.teifContentHash || inv.teifSignature || inv.ttnReference || inv.teifLastError ? (
+                <dl className="mb-3 space-y-1.5 text-xs text-s-muted">
+                  {inv.teifContentHash ? (
+                    <div>
+                      <dt className="font-semibold text-s-navy/70">{t('teifTraceHash')}</dt>
+                      <dd className="break-all font-mono">{inv.teifContentHash}</dd>
+                    </div>
+                  ) : null}
+                  {inv.teifSignature ? (
+                    <div>
+                      <dt className="font-semibold text-s-navy/70">{t('teifTraceSignature')}</dt>
+                      <dd className="break-all font-mono">
+                        {inv.teifSignature.length > 96
+                          ? `${inv.teifSignature.slice(0, 96)}…`
+                          : inv.teifSignature}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {inv.teifSignedAt ? (
+                    <div>
+                      <dt className="font-semibold text-s-navy/70">{t('teifTraceSignedAt')}</dt>
+                      <dd>{new Date(inv.teifSignedAt).toLocaleString('fr-FR')}</dd>
+                    </div>
+                  ) : null}
+                  {inv.ttnReference ? (
+                    <div>
+                      <dt className="font-semibold text-s-navy/70">{t('teifTraceTtn')}</dt>
+                      <dd className="font-mono">{inv.ttnReference}</dd>
+                    </div>
+                  ) : null}
+                  {inv.teifLastError ? (
+                    <div>
+                      <dt className="font-semibold text-rose-700">Erreur</dt>
+                      <dd className="text-rose-700">{inv.teifLastError}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {canEmitTeif ? (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    disabled={transmitPending}
+                    onClick={() => void emitTeif()}
+                  >
+                    {transmitPending ? tc('loading') : t('emitTeif')}
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void onDownloadTeif()}
+                >
+                  {t('exportTeif')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={transmitPending}
+                  onClick={() => void transmitTeif()}
+                >
+                  {transmitPending ? tc('loading') : t('transmitTeif')}
+                </Button>
+              </div>
             </Card>
           ) : null}
 

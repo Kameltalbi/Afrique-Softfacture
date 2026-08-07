@@ -34,7 +34,7 @@ export function AnnouncementBar({ message, fullWidth = false }: Props) {
   }
 
   return (
-    <div className="relative w-full border-b border-[#dbe4ee] bg-[#eff4f9]">
+    <div className="relative w-full border-b border-[#cfe0f2] bg-[#E4F0FB]">
       <div
         className={
           fullWidth

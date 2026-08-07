@@ -3,6 +3,7 @@
 import { Suspense, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { Eye, EyeOff } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { isPlanId } from '@/lib/pricing-plans';
 import {
@@ -12,16 +13,23 @@ import {
   getMarketByCountry,
 } from '@/lib/markets';
 import { useAuth } from '@/contexts/auth-context';
-import { Card, CardTitle } from '@/components/ui/card';
+import { BrandWordmark } from '@/components/brand/brand-wordmark';
+import { LocaleSwitcher } from '@/components/locale-switcher';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
-import { Eye, EyeOff } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+function fieldClassName(extra?: string) {
+  return cn(
+    'h-12 rounded-lg border-slate-200 bg-white px-3 text-base text-s-navy placeholder:text-slate-400 focus:border-brand-blue focus:ring-brand-blue/15 sm:h-11 sm:text-sm',
+    extra
+  );
+}
 
 function RegisterContent() {
   const t = useTranslations('auth');
   const tMarkets = useTranslations('markets');
-  const navT = useTranslations('nav');
   const tc = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -36,6 +44,7 @@ function RegisterContent() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [pending, setPending] = useState(false);
 
   const market = useMemo(() => getMarketByCountry(country), [country]);
@@ -45,6 +54,14 @@ function RegisterContent() {
 
     if (phone.trim().length < 8) {
       toast.push(t('phoneInvalid'), 'error');
+      return;
+    }
+    if (password.length < 8) {
+      toast.push(t('registerPasswordHint'), 'error');
+      return;
+    }
+    if (!acceptedTerms) {
+      toast.push(t('registerTermsRequired'), 'error');
       return;
     }
 
@@ -79,113 +96,194 @@ function RegisterContent() {
   }
 
   return (
-    <Card className="border-s-border/80 shadow-2xl">
-      <div className="mb-6 flex items-center justify-between">
-        <CardTitle>{t('registerTitle')}</CardTitle>
-      </div>
-
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-s-muted">{t('firstName')}</label>
-            <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-s-muted">{t('lastName')}</label>
-            <Input value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+    <div className="flex min-h-dvh flex-col lg:flex-row">
+      <section className="flex flex-1 flex-col bg-white px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:px-8 lg:px-12">
+        <div className="mb-6 flex items-center justify-between gap-3 sm:mb-8">
+          <Link href="/" aria-label={t('backHome')}>
+            <BrandWordmark />
+          </Link>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <LocaleSwitcher />
+            <Link href="/login" className="text-sm text-brand-blue hover:underline">
+              {t('hasAccount')}
+            </Link>
           </div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-s-muted">{t('companyName')}</label>
-          <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} required />
-        </div>
+        <div className="mx-auto w-full max-w-xl flex-1">
+          <h1 className="text-lg font-semibold tracking-tight text-s-navy sm:text-xl">
+            {t('registerTitle')}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">{t('registerFormTitle')}</p>
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-s-muted">{t('country')}</label>
-          <select
-            value={country}
-            onChange={(e) => setCountry(e.target.value as MarketCountryCode)}
-            required
-            className="flex h-10 w-full rounded-lg border border-s-border bg-white px-3 text-sm text-s-navy outline-none focus:ring-2 focus:ring-brand-blue/25"
-          >
-            {MARKET_COUNTRIES.map((c) => (
-              <option key={c.code} value={c.code}>
-                {tMarkets(c.code)} ({c.currency})
-              </option>
-            ))}
-          </select>
-          <p className="mt-1.5 text-xs text-s-muted">
-            {t('countryBillingHint', { currency: market.currency })}
-          </p>
-        </div>
+          <form onSubmit={(e) => void onSubmit(e)} className="mt-6 space-y-4 sm:mt-8">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  {t('lastName')} *
+                </label>
+                <Input
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
+                  className={fieldClassName()}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  {t('firstName')} *
+                </label>
+                <Input
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                  className={fieldClassName()}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  {t('phone')} *
+                </label>
+                <Input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder={market.phonePlaceholder}
+                  required
+                  minLength={8}
+                  className={fieldClassName()}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  {t('companyName')} *
+                </label>
+                <Input
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  required
+                  className={fieldClassName()}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  {t('email')} *
+                </label>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className={fieldClassName()}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  {t('password')} *
+                </label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    className={fieldClassName('pr-10')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-s-navy"
+                    aria-label={showPassword ? t('hidePassword') : t('showPassword')}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                  {t('country')} *
+                </label>
+                <select
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value as MarketCountryCode)}
+                  required
+                  className={fieldClassName('w-full outline-none focus:ring-2')}
+                >
+                  {MARKET_COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {tMarkets(c.code)} ({c.currency})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-s-muted">{t('email')}</label>
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </div>
+            <label className="flex cursor-pointer items-start gap-3 pt-1 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-brand accent-brand"
+              />
+              <span>
+                {t.rich('registerTerms', {
+                  cgv: (chunks) => (
+                    <Link href="/cgv" className="text-brand-blue hover:underline">
+                      {chunks}
+                    </Link>
+                  ),
+                  privacy: (chunks) => (
+                    <Link
+                      href="/politique-de-confidentialite"
+                      className="text-brand-blue hover:underline"
+                    >
+                      {chunks}
+                    </Link>
+                  ),
+                })}
+              </span>
+            </label>
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-s-muted">{t('phone')}</label>
-          <Input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder={market.phonePlaceholder}
-            required
-            minLength={8}
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-s-muted">{t('password')}</label>
-
-          <div className="relative">
-            <Input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              className="pr-10"
-            />
-
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-s-muted hover:text-s-navy"
+            <Button
+              type="submit"
+              disabled={pending}
+              className="mt-2 h-12 w-full rounded-lg bg-brand text-base font-semibold text-white hover:bg-brand-hover sm:h-11 sm:w-auto sm:min-w-[200px] sm:text-sm"
             >
-              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-            </button>
+              {pending ? '…' : t('submitRegister')}
+            </Button>
+          </form>
+        </div>
+      </section>
+
+      <aside className="relative hidden w-[38%] shrink-0 bg-[#EAF3FC] lg:block">
+        <div className="flex h-full flex-col items-center justify-center px-12">
+          <p className="max-w-xs text-center text-xl font-semibold leading-snug text-[#1e3a5f]">
+            {t('loginPromoShort')}
+          </p>
+          <div className="mt-8 w-full max-w-xs rounded-2xl border border-white/80 bg-white/70 p-5 shadow-sm">
+            <div className="space-y-2.5">
+              <div className="h-2 w-1/2 rounded-full bg-slate-100" />
+              <div className="h-2 w-full rounded-full bg-slate-100" />
+              <div className="h-2 w-4/5 rounded-full bg-slate-100" />
+              <div className="mt-3 h-14 rounded-xl bg-[#E4F0FB]" />
+            </div>
           </div>
         </div>
-
-        <p className="text-xs text-s-muted">{t('registerAdminNote')}</p>
-
-        <Button type="submit" className="w-full" disabled={pending}>
-          {pending ? '…' : t('submitRegister')}
-        </Button>
-      </form>
-
-      <p className="mt-6 text-center text-sm text-s-muted">
-        {t('hasAccount')}{' '}
-        <Link href="/login" className="font-medium text-s-accent hover:underline">
-          {navT('login')}
-        </Link>
-      </p>
-
-      <p className="mt-4 text-center">
-        <Link href="/" className="text-xs text-s-muted hover:text-s-navy">
-          ← {tc('back')}
-        </Link>
-      </p>
-    </Card>
+      </aside>
+    </div>
   );
 }
 
 export default function RegisterPage() {
   return (
-    <Suspense fallback={<div>Chargement...</div>}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">
+          …
+        </div>
+      }
+    >
       <RegisterContent />
     </Suspense>
   );

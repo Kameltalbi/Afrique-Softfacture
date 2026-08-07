@@ -14,10 +14,11 @@ export async function SiteFooter() {
     {
       title: t('footerColProduct'),
       links: [
-        { href: '/#features', label: t('footerFeatures') },
+        { href: '/devis', label: t('navQuotes') },
+        { href: '/factures', label: t('navInvoices') },
+        { href: '/facture-electronique', label: t('navEinvoice') },
+        { href: '/note-de-frais', label: t('navExpenses') },
         { href: '/tarifs', label: t('navPricing') },
-        { href: '/#faq', label: t('navFaq') },
-        { href: '/#preview', label: t('footerDemo') },
       ],
     },
     {

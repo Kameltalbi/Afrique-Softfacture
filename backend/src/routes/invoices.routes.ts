@@ -12,6 +12,9 @@ import {
   generateFacturXPdf,
   generateFacturXXml,
 } from '../services/facturXGenerate.js';
+import { generateTeifXml, TeifGenerateError } from '../services/teifGenerate.js';
+import { transmitTeifToElFatoora, TeifTransmitError } from '../services/teifTransmit.js';
+import { emitTeifEInvoice, TeifEmitError } from '../services/teifEmitWorkflow.js';
 import { computeNetToPay } from '../lib/invoiceTotals.js';
 import {
   documentLanguageSchema,
@@ -309,6 +312,50 @@ router.get('/:id/factur-x.xml', async (req, res) => {
     return res.send(result.xml);
   } catch (e) {
     if (e instanceof FacturXGenerateError) {
+      return res.status(e.statusCode).json({ error: e.message });
+    }
+    throw e;
+  }
+});
+
+/** Export TEIF Tunisie (XML non signé — phase A El Fatoora). */
+router.get('/:id/teif.xml', async (req, res) => {
+  try {
+    const result = await generateTeifXml(req.params.id, orgId(req));
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.setHeader('X-TEIF-Unsigned', '1');
+    return res.send(result.xml);
+  } catch (e) {
+    if (e instanceof TeifGenerateError) {
+      return res.status(e.statusCode).json({ error: e.message });
+    }
+    throw e;
+  }
+});
+
+/** Soumission sandbox El Fatoora (mock) — sans signature Digigo. */
+router.post('/:id/einvoice/teif/transmit', async (req, res) => {
+  try {
+    const result = await transmitTeifToElFatoora(req.params.id, orgId(req));
+    return res.status(201).json(result);
+  } catch (e) {
+    if (e instanceof TeifTransmitError) {
+      return res.status(e.statusCode).json({ error: e.message });
+    }
+    throw e;
+  }
+});
+
+/**
+ * Émettre la e-facture TEIF : XML 1.8.8 → SHA-256 → Digigo (sim/prod) → TTN → traçabilité.
+ */
+router.post('/:id/einvoice/teif/emit', async (req, res) => {
+  try {
+    const result = await emitTeifEInvoice(req.params.id, orgId(req));
+    return res.status(201).json(result);
+  } catch (e) {
+    if (e instanceof TeifEmitError) {
       return res.status(e.statusCode).json({ error: e.message });
     }
     throw e;

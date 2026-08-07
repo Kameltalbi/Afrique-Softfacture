@@ -1,21 +1,24 @@
-import Image from 'next/image';
-
-/** Visuel hero SoftFacture Afrique (professionnelle + tablette analytics). */
-const HERO_IMAGE = '/hero-softfacture-afrique.png';
-
+/**
+ * Visuel hero SoftFacture Afrique.
+ * WebP ~30 ko / JPEG ~48 ko — servi en static pour un affichage immédiat.
+ */
 export function HeroVisual() {
   return (
     <div className="relative mx-auto w-full max-w-lg lg:max-w-none lg:ms-auto">
-      <div className="relative overflow-hidden rounded-3xl bg-slate-50 shadow-2xl ring-1 ring-slate-200/80">
-        <Image
-          src={HERO_IMAGE}
-          alt="Professionnelle utilisant SoftFacture Afrique sur tablette pour suivre devis et factures"
-          width={1024}
-          height={768}
-          className="h-auto w-full object-cover object-center"
-          priority
-          sizes="(max-width: 1024px) 100vw, 560px"
-        />
+      <div className="relative overflow-hidden rounded-3xl bg-[#E4F0FB] shadow-2xl ring-1 ring-slate-200/70">
+        <picture>
+          <source srcSet="/hero-softfacture-afrique.webp" type="image/webp" />
+          <img
+            src="/hero-softfacture-afrique.jpg"
+            alt="Professionnelle présentant SoftFacture sur tablette dans un environnement de bureau"
+            width={960}
+            height={638}
+            className="h-auto w-full object-cover object-center"
+            decoding="async"
+            fetchPriority="high"
+            loading="eager"
+          />
+        </picture>
       </div>
     </div>
   );

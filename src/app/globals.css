@@ -58,6 +58,24 @@ body {
   color: var(--s-navy);
 }
 
+/* Évite le zoom iOS sur focus input (font-size ≥ 16px) */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Touch targets confortables en PWA */
+@media (pointer: coarse) {
+  button,
+  a,
+  [role='button'] {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
 /* ====== A4 Print Styles ====== */
 @page {
   size: A4;

@@ -17,7 +17,7 @@ export async function LandingHero() {
   ];
 
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-[#f4f8fc] via-white to-[#eef8f4] py-14 md:py-20 lg:py-24">
+    <section className="relative overflow-hidden bg-[#E4F0FB] py-14 md:py-20 lg:py-24">
       <div
         className="pointer-events-none absolute -end-24 top-10 h-[28rem] w-[28rem] rounded-full bg-brand-blue/10 blur-3xl"
         aria-hidden
