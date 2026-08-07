@@ -15,6 +15,7 @@ import { formatMoneyAmount } from '@/lib/format-money-currency';
 import { cn } from '@/lib/utils';
 import { ListPagination, StatTabButton, paginateRows } from '@/components/list/list-ui';
 import { ExpenseReportsEmpty } from '@/components/expense-reports/expense-reports-empty';
+import { ExpenseReportsFeatureGate } from '@/components/expense-reports/expense-reports-feature-gate';
 
 type ExpenseStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'REIMBURSED';
 
@@ -128,163 +129,165 @@ export default function ExpenseReportsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{t('title')}</h1>
-          <p className="mt-1 text-sm text-slate-500">{t('subtitle')}</p>
+    <ExpenseReportsFeatureGate>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{t('title')}</h1>
+            <p className="mt-1 text-sm text-slate-500">{t('subtitle')}</p>
+          </div>
+          {list && list.length > 0 ? (
+            <Link
+              href="/notes-de-frais/new"
+              className="inline-flex items-center gap-2 rounded-md bg-s-accent px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-s-accent/25 hover:bg-s-accent-hover"
+            >
+              <Plus className="h-4 w-4" />
+              {t('new')}
+            </Link>
+          ) : null}
         </div>
-        {list && list.length > 0 ? (
-          <Link
-            href="/notes-de-frais/new"
-            className="inline-flex items-center gap-2 rounded-md bg-s-accent px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-s-accent/25 hover:bg-s-accent-hover"
-          >
-            <Plus className="h-4 w-4" />
-            {t('new')}
-          </Link>
-        ) : null}
-      </div>
 
-      {!list ? (
-        <p className="text-sm text-slate-500">{tc('loading')}</p>
-      ) : list.length === 0 ? (
-        <ExpenseReportsEmpty />
-      ) : (
-        <>
-          <div className="overflow-x-auto border-b border-s-border">
-            <div className="flex min-w-max">
-              {STATUS_TABS.map((key) => (
-                <StatTabButton
-                  key={key}
-                  active={tab === key}
-                  count={counts[key]}
-                  showAmount={false}
-                  onClick={() => setTab(key)}
-                  label={key === 'all' ? t('tabAll') : t(`status.${key}`)}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="relative max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t('searchPlaceholder')}
-              className="pl-9"
-            />
-          </div>
-
-          {filtered.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-16 text-center">
-              <p className="text-sm font-medium text-slate-700">{t('emptyFiltered')}</p>
-            </div>
-          ) : (
-            <>
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b border-slate-100 bg-slate-50/80 text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">{t('number')}</th>
-                      <th className="px-4 py-3 font-medium">{t('reportTitle')}</th>
-                      <th className="px-4 py-3 font-medium">{t('date')}</th>
-                      <th className="px-4 py-3 font-medium">{t('statusLabel')}</th>
-                      <th className="px-4 py-3 font-medium text-right">{t('amount')}</th>
-                      <th className="px-4 py-3 font-medium text-right">{tc('actions')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pageRows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60"
-                      >
-                        <td className="px-4 py-3 tabular-nums text-slate-500">
-                          {row.number ?? '—'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Link
-                            href={`/notes-de-frais/${row.id}`}
-                            className="font-medium text-slate-900 hover:text-blue-600"
-                          >
-                            {row.title}
-                          </Link>
-                          {row._count?.lines != null ? (
-                            <p className="text-xs text-slate-400">
-                              {t('linesCount', { count: row._count.lines })}
-                            </p>
-                          ) : null}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {format(new Date(row.expenseDate), 'dd/MM/yyyy')}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={cn(
-                              'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
-                              STATUS_STYLES[row.status]
-                            )}
-                          >
-                            {t(`status.${row.status}`)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-900">
-                          {formatMoneyAmount(amount(row), row.currency)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {(row.status === 'DRAFT' || row.status === 'REJECTED') && (
-                            <button
-                              type="button"
-                              onClick={() => setDelId(row.id)}
-                              className="inline-flex rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                              title={tc('delete')}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <ListPagination
-                page={page}
-                pageSize={pageSize}
-                total={filtered.length}
-                onPageChange={setPage}
-                onPageSizeChange={setPageSize}
-                rowsText={t('paginationRows', {
-                  start: rowStart,
-                  end: rowEnd,
-                  total: filtered.length,
-                })}
-                prevLabel={t('paginationPrev')}
-                nextLabel={t('paginationNext')}
-              />
-            </>
-          )}
-        </>
-      )}
-
-      <Modal
-        open={!!delId}
-        onClose={() => setDelId(null)}
-        title={t('deleteTitle')}
-        footer={
+        {!list ? (
+          <p className="text-sm text-slate-500">{tc('loading')}</p>
+        ) : list.length === 0 ? (
+          <ExpenseReportsEmpty />
+        ) : (
           <>
-            <Button type="button" variant="ghost" onClick={() => setDelId(null)}>
-              {tc('cancel')}
-            </Button>
-            <Button type="button" variant="danger" onClick={() => void confirmDelete()}>
-              {tc('delete')}
-            </Button>
+            <div className="overflow-x-auto border-b border-s-border">
+              <div className="flex min-w-max">
+                {STATUS_TABS.map((key) => (
+                  <StatTabButton
+                    key={key}
+                    active={tab === key}
+                    count={counts[key]}
+                    showAmount={false}
+                    onClick={() => setTab(key)}
+                    label={key === 'all' ? t('tabAll') : t(`status.${key}`)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="relative max-w-md">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t('searchPlaceholder')}
+                className="pl-9"
+              />
+            </div>
+
+            {filtered.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-16 text-center">
+                <p className="text-sm font-medium text-slate-700">{t('emptyFiltered')}</p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-slate-100 bg-slate-50/80 text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">{t('number')}</th>
+                        <th className="px-4 py-3 font-medium">{t('reportTitle')}</th>
+                        <th className="px-4 py-3 font-medium">{t('date')}</th>
+                        <th className="px-4 py-3 font-medium">{t('statusLabel')}</th>
+                        <th className="px-4 py-3 font-medium text-right">{t('amount')}</th>
+                        <th className="px-4 py-3 font-medium text-right">{tc('actions')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageRows.map((row) => (
+                        <tr
+                          key={row.id}
+                          className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60"
+                        >
+                          <td className="px-4 py-3 tabular-nums text-slate-500">
+                            {row.number ?? '—'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Link
+                              href={`/notes-de-frais/${row.id}`}
+                              className="font-medium text-slate-900 hover:text-blue-600"
+                            >
+                              {row.title}
+                            </Link>
+                            {row._count?.lines != null ? (
+                              <p className="text-xs text-slate-400">
+                                {t('linesCount', { count: row._count.lines })}
+                              </p>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {format(new Date(row.expenseDate), 'dd/MM/yyyy')}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={cn(
+                                'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
+                                STATUS_STYLES[row.status]
+                              )}
+                            >
+                              {t(`status.${row.status}`)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-900">
+                            {formatMoneyAmount(amount(row), row.currency)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {(row.status === 'DRAFT' || row.status === 'REJECTED') && (
+                              <button
+                                type="button"
+                                onClick={() => setDelId(row.id)}
+                                className="inline-flex rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                                title={tc('delete')}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <ListPagination
+                  page={page}
+                  pageSize={pageSize}
+                  total={filtered.length}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                  rowsText={t('paginationRows', {
+                    start: rowStart,
+                    end: rowEnd,
+                    total: filtered.length,
+                  })}
+                  prevLabel={t('paginationPrev')}
+                  nextLabel={t('paginationNext')}
+                />
+              </>
+            )}
           </>
-        }
-      >
-        <p>{t('deleteConfirm')}</p>
-      </Modal>
-    </div>
+        )}
+
+        <Modal
+          open={!!delId}
+          onClose={() => setDelId(null)}
+          title={t('deleteTitle')}
+          footer={
+            <>
+              <Button type="button" variant="ghost" onClick={() => setDelId(null)}>
+                {tc('cancel')}
+              </Button>
+              <Button type="button" variant="danger" onClick={() => void confirmDelete()}>
+                {tc('delete')}
+              </Button>
+            </>
+          }
+        >
+          <p>{t('deleteConfirm')}</p>
+        </Modal>
+      </div>
+    </ExpenseReportsFeatureGate>
   );
 }

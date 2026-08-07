@@ -177,13 +177,16 @@ export function NewInvoiceEditor({ invoiceKind = 'STANDARD' }: NewInvoiceEditorP
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
   const [activePanel, setActivePanel] = useState<InvoiceEditorPanel>(null);
-  const defaultVat = toNumber(user?.organization?.defaultVatRate ?? 20);
+  const defaultVat = toNumber(user?.organization?.defaultVatRate ?? 19);
+  const orgCurrency = user?.organization?.defaultCurrency ?? 'TND';
+  const orgCountry = (user?.organization?.country ?? 'TN').toUpperCase();
+  const isTunisia = orgCountry === 'TN' || orgCurrency === 'TND';
   const [settings, setSettings] = useState<DocumentSettings>(() => ({
     documentLanguage: 'fr',
-    currency: user?.organization?.defaultCurrency ?? 'EUR',
+    currency: orgCurrency,
     applyVat: true,
-    applyFiscalStamp: false,
-    fiscalStamp: 0,
+    applyFiscalStamp: isTunisia,
+    fiscalStamp: isTunisia ? 1 : 0,
     discountEnabled: false,
     discountRate: 0,
     showCurrencyOnLines: true,
@@ -217,10 +220,21 @@ export function NewInvoiceEditor({ invoiceKind = 'STANDARD' }: NewInvoiceEditorP
   }, [token, load, toast]);
 
   useEffect(() => {
-    if (user?.organization?.defaultCurrency) {
-      setSettings((prev) => ({ ...prev, currency: user.organization!.defaultCurrency }));
-    }
-  }, [user?.organization?.defaultCurrency]);
+    const currency = user?.organization?.defaultCurrency;
+    const country = user?.organization?.country?.toUpperCase();
+    if (!currency && !country) return;
+    setSettings((prev) => {
+      const nextCurrency = currency ?? prev.currency;
+      const tunisia = (country ?? '') === 'TN' || nextCurrency === 'TND';
+      // Appliquer le timbre par défaut seulement si l’utilisateur ne l’a pas déjà activé/réglé.
+      const stampUntouched = !prev.applyFiscalStamp && prev.fiscalStamp === 0;
+      return {
+        ...prev,
+        currency: nextCurrency,
+        ...(tunisia && stampUntouched ? { applyFiscalStamp: true, fiscalStamp: 1 } : {}),
+      };
+    });
+  }, [user?.organization?.defaultCurrency, user?.organization?.country]);
 
   useEffect(() => {
     if (!token || isDeposit || !clientId) {

@@ -147,17 +147,22 @@ export default function NewQuotePage() {
   const [notes, setNotes] = useState('');
   const [activePanel, setActivePanel] = useState<InvoiceEditorPanel>(null);
   const defaultVat = toNumber(user?.organization?.defaultVatRate ?? 20);
-  const [settings, setSettings] = useState<DocumentSettings>(() => ({
-    documentLanguage: 'fr',
-    currency: user?.organization?.defaultCurrency ?? 'EUR',
-    applyVat: true,
-    applyFiscalStamp: false,
-    fiscalStamp: 0,
-    discountEnabled: false,
-    discountRate: 0,
-    showCurrencyOnLines: true,
-    appliedDepositId: null,
-  }));
+  const [settings, setSettings] = useState<DocumentSettings>(() => {
+    const currency = user?.organization?.defaultCurrency ?? 'TND';
+    const country = (user?.organization?.country ?? 'TN').toUpperCase();
+    const tunisia = country === 'TN' || currency === 'TND';
+    return {
+      documentLanguage: 'fr',
+      currency,
+      applyVat: true,
+      applyFiscalStamp: tunisia,
+      fiscalStamp: tunisia ? 1 : 0,
+      discountEnabled: false,
+      discountRate: 0,
+      showCurrencyOnLines: true,
+      appliedDepositId: null,
+    };
+  });
   const [lines, setLines] = useState<Line[]>(() => [emptyLine(defaultVat)]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [savedDraftId, setSavedDraftId] = useState<string | null>(null);
@@ -183,10 +188,20 @@ export default function NewQuotePage() {
   }, [token, load, toast]);
 
   useEffect(() => {
-    if (user?.organization?.defaultCurrency) {
-      setSettings((prev) => ({ ...prev, currency: user.organization!.defaultCurrency }));
-    }
-  }, [user?.organization?.defaultCurrency]);
+    const currency = user?.organization?.defaultCurrency;
+    const country = user?.organization?.country?.toUpperCase();
+    if (!currency && !country) return;
+    setSettings((prev) => {
+      const nextCurrency = currency ?? prev.currency;
+      const tunisia = (country ?? '') === 'TN' || nextCurrency === 'TND';
+      const stampUntouched = !prev.applyFiscalStamp && prev.fiscalStamp === 0;
+      return {
+        ...prev,
+        currency: nextCurrency,
+        ...(tunisia && stampUntouched ? { applyFiscalStamp: true, fiscalStamp: 1 } : {}),
+      };
+    });
+  }, [user?.organization?.defaultCurrency, user?.organization?.country]);
 
   const filteredClients = useMemo(() => {
     if (!clients) return [];

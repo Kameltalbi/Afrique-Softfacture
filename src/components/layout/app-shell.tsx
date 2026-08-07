@@ -46,7 +46,9 @@ const mainNav = [
   { href: '/dashboard', key: 'dashboard' as const, icon: LayoutDashboard },
   { href: '/clients', key: 'clients' as const, icon: Users },
   { href: '/products', key: 'products' as const, icon: Package },
-  { href: '/notes-de-frais', key: 'expenseReports' as const, icon: Wallet },
+  ...(FEATURES.expenseReports
+    ? [{ href: '/notes-de-frais' as const, key: 'expenseReports' as const, icon: Wallet }]
+    : []),
   { href: '/stock', key: 'stock' as const, icon: Warehouse },
   { href: '/settings', key: 'settings' as const, icon: Settings },
 ];

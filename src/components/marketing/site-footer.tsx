@@ -1,6 +1,7 @@
 import { Link } from '@/i18n/navigation';
 import { getTranslations } from 'next-intl/server';
 import { BrandLogo } from '@/components/brand/brand-logo';
+import { FEATURES } from '@/lib/feature-flags';
 
 /**
  * Footer marketing riche — affiché sur toutes les pages publiques.
@@ -17,7 +18,7 @@ export async function SiteFooter() {
         { href: '/devis', label: t('navQuotes') },
         { href: '/factures', label: t('navInvoices') },
         { href: '/facture-electronique', label: t('navEinvoice') },
-        { href: '/note-de-frais', label: t('navExpenses') },
+        ...(FEATURES.expenseReports ? [{ href: '/note-de-frais', label: t('navExpenses') }] : []),
         { href: '/tarifs', label: t('navPricing') },
       ],
     },

@@ -188,8 +188,18 @@ function SettingsPanelBody({
 
             <Section title="Taxes personnalisées">
               <SettingRow
-                label="Taxe fixe additionnelle"
-                description={fiscalHint}
+                label={
+                  localSettings.currency === 'TND' || localSettings.currency === 'DT'
+                    ? 'Timbre fiscal'
+                    : 'Taxe fixe additionnelle'
+                }
+                description={
+                  localSettings.currency === 'TND' || localSettings.currency === 'DT'
+                    ? localSettings.fiscalStamp > 0
+                      ? `${localSettings.fiscalStamp.toFixed(3)} DT (timbre électronique)`
+                      : 'Montant du timbre fiscal (souvent 1,000 DT)'
+                    : fiscalHint
+                }
                 checked={localSettings.applyFiscalStamp}
                 onCheckedChange={(checked) =>
                   setLocalSettings({ ...localSettings, applyFiscalStamp: checked })

@@ -8,6 +8,7 @@ import { MobileLandingMenu } from '@/components/marketing/mobile-landing-menu';
 import { ProductNavDropdown } from '@/components/marketing/product-nav-dropdown';
 import { AnnouncementBar } from '@/components/marketing/announcement-bar';
 import { cn } from '@/lib/utils';
+import { FEATURES } from '@/lib/feature-flags';
 
 export type SiteHeaderActive =
   | 'home'
@@ -33,7 +34,7 @@ export async function SiteHeader({ activeNav = null }: { activeNav?: SiteHeaderA
     activeNav === 'quotes' ||
     activeNav === 'invoices' ||
     activeNav === 'einvoice' ||
-    activeNav === 'expenses';
+    (FEATURES.expenseReports && activeNav === 'expenses');
 
   const productItems = [
     {
@@ -54,12 +55,16 @@ export async function SiteHeader({ activeNav = null }: { activeNav?: SiteHeaderA
       description: t('navEinvoiceDesc'),
       active: activeNav === 'einvoice',
     },
-    {
-      href: '/note-de-frais',
-      label: t('navExpenses'),
-      description: t('navExpensesDesc'),
-      active: activeNav === 'expenses',
-    },
+    ...(FEATURES.expenseReports
+      ? [
+          {
+            href: '/note-de-frais',
+            label: t('navExpenses'),
+            description: t('navExpensesDesc'),
+            active: activeNav === 'expenses',
+          },
+        ]
+      : []),
   ];
 
   const topLinks = [
@@ -75,7 +80,9 @@ export async function SiteHeader({ activeNav = null }: { activeNav?: SiteHeaderA
       label: t('navEinvoice'),
       group: t('navProduct'),
     },
-    { href: '/note-de-frais', label: t('navExpenses'), group: t('navProduct') },
+    ...(FEATURES.expenseReports
+      ? [{ href: '/note-de-frais', label: t('navExpenses'), group: t('navProduct') }]
+      : []),
     { href: '/tarifs', label: t('navPricing') },
     { href: '/#faq', label: t('navFaq') },
   ];

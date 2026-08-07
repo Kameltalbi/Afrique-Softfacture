@@ -91,6 +91,16 @@ function hasAdvanceDeduction(inv: InvoicePdfInput): boolean {
   return parseFloat(inv.advanceDeduction ?? '0') > 0.0005;
 }
 
+function hasFiscalStamp(inv: InvoicePdfInput): boolean {
+  return Boolean(inv.applyFiscalStamp) && parseFloat(inv.fiscalStamp ?? '0') > 0.0005;
+}
+
+function fiscalStampDisplay(inv: InvoicePdfInput): string {
+  const n = parseFloat(inv.fiscalStamp ?? '0');
+  if (!Number.isFinite(n)) return inv.fiscalStamp ?? '1.000';
+  return n.toFixed(3);
+}
+
 function amountForWords(inv: InvoicePdfInput): string {
   if (hasAdvanceDeduction(inv)) {
     return inv.netToPay ?? inv.totalTtc;
@@ -407,23 +417,19 @@ function renderClassic(doc: InstanceType<typeof PDFDocument>, inv: InvoicePdfInp
   });
 
   // TOTAL highlighted row
-  const totalRowY = yTotals + (inv.applyFiscalStamp ? 58 : 40);
-  if (inv.applyFiscalStamp) {
+  const showStamp = hasFiscalStamp(inv);
+  const totalRowY = yTotals + (showStamp ? 58 : 40);
+  if (showStamp) {
     doc.text(L.fiscalStamp, totalsX, yTotals + 36, {
       width: totalsW - 90,
       align: 'right',
       lineBreak: false,
     });
-    doc.text(
-      `${inv.fiscalStamp ?? '1.000'} ${inv.currency}`,
-      totalsX + totalsW - 85,
-      yTotals + 36,
-      {
-        width: 85,
-        align: 'right',
-        lineBreak: false,
-      }
-    );
+    doc.text(`${fiscalStampDisplay(inv)} ${inv.currency}`, totalsX + totalsW - 85, yTotals + 36, {
+      width: 85,
+      align: 'right',
+      lineBreak: false,
+    });
   }
   doc.rect(totalsX, totalRowY, totalsW, 24).fill(accent);
   doc.fillColor('#ffffff').fontSize(11).font('Helvetica-Bold');
@@ -626,11 +632,13 @@ function renderModern(doc: InstanceType<typeof PDFDocument>, inv: InvoicePdfInpu
     accent
   );
   let yTotals = afterTable + 22;
-  if (yTotals + 108 > contentMaxY(doc)) {
+  if (yTotals + 130 > contentMaxY(doc)) {
     doc.addPage();
     yTotals = SIDE_MARGIN + 36;
   }
   const totalsX = w - SIDE_MARGIN - 205;
+  const showStamp = hasFiscalStamp(inv);
+  const stampOffset = showStamp ? 22 : 0;
   doc.fontSize(9).font('Helvetica-Bold').fillColor('#94a3b8');
   doc.text(L.subtotalHt.replace(':', ''), totalsX, yTotals, { width: 92, lineBreak: false });
   doc.text(`${inv.subtotalHt} ${inv.currency}`, totalsX + 105, yTotals, {
@@ -644,35 +652,51 @@ function renderModern(doc: InstanceType<typeof PDFDocument>, inv: InvoicePdfInpu
     align: 'right',
     lineBreak: false,
   });
-  doc.rect(totalsX - 8, yTotals + 44, 213, 28).fill(lightBlue);
+  if (showStamp) {
+    doc.text(L.fiscalStamp.replace(':', ''), totalsX, yTotals + 44, {
+      width: 92,
+      lineBreak: false,
+    });
+    doc.text(`${fiscalStampDisplay(inv)} ${inv.currency}`, totalsX + 105, yTotals + 44, {
+      width: 100,
+      align: 'right',
+      lineBreak: false,
+    });
+  }
+  doc.rect(totalsX - 8, yTotals + 44 + stampOffset, 213, 28).fill(lightBlue);
   doc.fontSize(11).font('Helvetica-Bold').fillColor(blue);
-  doc.text(L.totalTtc, totalsX, yTotals + 52, { width: 90, lineBreak: false });
-  doc.text(`${inv.totalTtc} ${inv.currency}`, totalsX + 95, yTotals + 52, {
+  doc.text(L.totalTtc, totalsX, yTotals + 52 + stampOffset, { width: 90, lineBreak: false });
+  doc.text(`${inv.totalTtc} ${inv.currency}`, totalsX + 95, yTotals + 52 + stampOffset, {
     width: 105,
     align: 'right',
     lineBreak: false,
   });
-  let wordsY = yTotals + 88;
+  let wordsY = yTotals + 88 + stampOffset;
   if (hasAdvanceDeduction(inv)) {
     doc.fontSize(9).font('Helvetica').fillColor('#64748b');
     const label = inv.appliedDepositNumber
       ? L.advanceWithNumber(inv.appliedDepositNumber).replace(':', '')
       : L.advanceDeducted.replace(':', '');
-    doc.text(label, totalsX, yTotals + 78, { width: 90, lineBreak: false });
-    doc.text(`- ${inv.advanceDeduction} ${inv.currency}`, totalsX + 95, yTotals + 78, {
-      width: 105,
-      align: 'right',
-      lineBreak: false,
-    });
-    doc.rect(totalsX - 8, yTotals + 100, 213, 28).fill(accent);
+    doc.text(label, totalsX, yTotals + 78 + stampOffset, { width: 90, lineBreak: false });
+    doc.text(
+      `- ${inv.advanceDeduction} ${inv.currency}`,
+      totalsX + 95,
+      yTotals + 78 + stampOffset,
+      {
+        width: 105,
+        align: 'right',
+        lineBreak: false,
+      }
+    );
+    doc.rect(totalsX - 8, yTotals + 100 + stampOffset, 213, 28).fill(accent);
     doc.fontSize(11).font('Helvetica-Bold').fillColor('#ffffff');
-    doc.text(L.netToPay, totalsX, yTotals + 108, { width: 90, lineBreak: false });
-    doc.text(`${inv.netToPay} ${inv.currency}`, totalsX + 95, yTotals + 108, {
+    doc.text(L.netToPay, totalsX, yTotals + 108 + stampOffset, { width: 90, lineBreak: false });
+    doc.text(`${inv.netToPay} ${inv.currency}`, totalsX + 95, yTotals + 108 + stampOffset, {
       width: 105,
       align: 'right',
       lineBreak: false,
     });
-    wordsY = yTotals + 144;
+    wordsY = yTotals + 144 + stampOffset;
   }
   const afterWordsY = drawAmountInWordsBox(doc, inv, amountForWords(inv), inv.currency, wordsY, L);
   drawNoteBox(doc, inv.notes, afterWordsY + 6, L);
@@ -833,13 +857,15 @@ function renderMinimal(doc: InstanceType<typeof PDFDocument>, inv: InvoicePdfInp
     L
   );
   let yTotals = afterTable + 32;
-  if (yTotals + 115 > contentMaxY(doc)) {
+  if (yTotals + 140 > contentMaxY(doc)) {
     doc.addPage();
     yTotals = SIDE_MARGIN + 32;
   }
   const right = pageContentRight(doc);
   const totalsBoxW = 200;
   const totalsX = right - totalsBoxW + 10;
+  const showStamp = hasFiscalStamp(inv);
+  const stampOffset = showStamp ? 26 : 0;
   doc.fontSize(9).fillColor('#555555').font('Helvetica');
   doc.text(L.subtotalHt.replace(':', ''), totalsX, yTotals, { width: 80, lineBreak: false });
   doc.text(`${inv.subtotalHt} ${inv.currency}`, totalsX + 80, yTotals, {
@@ -853,46 +879,62 @@ function renderMinimal(doc: InstanceType<typeof PDFDocument>, inv: InvoicePdfInp
     align: 'right',
     lineBreak: false,
   });
+  if (showStamp) {
+    doc.text(L.fiscalStamp.replace(':', ''), totalsX, yTotals + 52, {
+      width: 80,
+      lineBreak: false,
+    });
+    doc.text(`${fiscalStampDisplay(inv)} ${inv.currency}`, totalsX + 80, yTotals + 52, {
+      width: 110,
+      align: 'right',
+      lineBreak: false,
+    });
+  }
   // Encadré TOTAL aligné sur le bord droit utile (même axe que les colonnes)
   doc.save();
-  doc.rect(right - totalsBoxW, yTotals + 52, totalsBoxW, 36).fill('#1a1a1a');
+  doc.rect(right - totalsBoxW, yTotals + 52 + stampOffset, totalsBoxW, 36).fill('#1a1a1a');
   doc.restore();
   doc.fontSize(10).fillColor('#ffffff').font('Helvetica-Bold');
-  doc.text(L.totalTtc, right - totalsBoxW + 12, yTotals + 64, {
+  doc.text(L.totalTtc, right - totalsBoxW + 12, yTotals + 64 + stampOffset, {
     width: 78,
     lineBreak: false,
   });
-  doc.text(`${inv.totalTtc} ${inv.currency}`, right - totalsBoxW + 90, yTotals + 64, {
+  doc.text(`${inv.totalTtc} ${inv.currency}`, right - totalsBoxW + 90, yTotals + 64 + stampOffset, {
     width: totalsBoxW - 102,
     align: 'right',
     lineBreak: false,
   });
-  let wordsY = yTotals + 104;
+  let wordsY = yTotals + 104 + stampOffset;
   if (hasAdvanceDeduction(inv)) {
     doc.fontSize(9).font('Helvetica').fillColor('#555555');
     const label = inv.appliedDepositNumber
       ? L.advanceWithNumber(inv.appliedDepositNumber).replace(':', '')
       : L.advanceDeducted.replace(':', '');
-    doc.text(label, totalsX, yTotals + 94, { width: 80, lineBreak: false });
-    doc.text(`- ${inv.advanceDeduction}`, totalsX + 80, yTotals + 94, {
+    doc.text(label, totalsX, yTotals + 94 + stampOffset, { width: 80, lineBreak: false });
+    doc.text(`- ${inv.advanceDeduction}`, totalsX + 80, yTotals + 94 + stampOffset, {
       width: 110,
       align: 'right',
       lineBreak: false,
     });
     doc.save();
-    doc.rect(right - totalsBoxW, yTotals + 116, totalsBoxW, 36).fill(accent);
+    doc.rect(right - totalsBoxW, yTotals + 116 + stampOffset, totalsBoxW, 36).fill(accent);
     doc.restore();
     doc.fontSize(10).fillColor('#ffffff').font('Helvetica-Bold');
-    doc.text(L.netToPay, right - totalsBoxW + 12, yTotals + 128, {
+    doc.text(L.netToPay, right - totalsBoxW + 12, yTotals + 128 + stampOffset, {
       width: 78,
       lineBreak: false,
     });
-    doc.text(`${inv.netToPay} ${inv.currency}`, right - totalsBoxW + 90, yTotals + 128, {
-      width: totalsBoxW - 102,
-      align: 'right',
-      lineBreak: false,
-    });
-    wordsY = yTotals + 168;
+    doc.text(
+      `${inv.netToPay} ${inv.currency}`,
+      right - totalsBoxW + 90,
+      yTotals + 128 + stampOffset,
+      {
+        width: totalsBoxW - 102,
+        align: 'right',
+        lineBreak: false,
+      }
+    );
+    wordsY = yTotals + 168 + stampOffset;
   }
   const afterWordsY = drawAmountInWordsBox(doc, inv, amountForWords(inv), inv.currency, wordsY, L);
   drawNoteBox(doc, inv.notes, afterWordsY + 6, L);
